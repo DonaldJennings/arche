@@ -1,0 +1,10 @@
+set(SCENE_TARGET_NAME "EngineScene")
+
+file(GLOB_RECURSE SCENE_SOURCES "*.cpp")
+file(GLOB_RECURSE SCENE_HEADERS "*.h")
+
+add_library(${SCENE_TARGET_NAME} STATIC ${SCENE_SOURCES} ${SCENE_HEADERS})
+
+target_include_directories(${SCENE_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+set_target_properties(${SCENE_TARGET_NAME} PROPERTIES FOLDER "Engine/Scene")

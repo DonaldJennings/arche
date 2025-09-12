@@ -1,0 +1,22 @@
+Checks: >
+    clang-analyzer-*,
+    bugprone-*,
+    performance-*,
+    readability-*,
+    modernize-*,
+    cppcoreguidelines-*,
+    misc-*,
+    -clang-analyzer-cplusplus.NewDeleteLeaks,
+    -cppcoreguidelines-avoid-magic-numbers
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+AnalyzeTemporaryDtors: false
+FormatStyle: file
+CheckOptions:
+    - key:             modernize-use-auto.MinTypeNameLength
+        value:           '5'
+    - key:             readability-magic-numbers.IgnoredValues
+        value:           '0,1,-1,2,3.14,9.81'
+    - key:             cppcoreguidelines-pro-type-member-init.Habilitate
+        value:           'true'
