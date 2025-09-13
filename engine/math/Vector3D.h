@@ -1,10 +1,8 @@
 #ifndef VECTOR3D_H
 #define VECTOR3D_H
 
-#include <cmath>
-#include <sstream>
-#include <stdexcept>
 #include <string>
+
 
 namespace Arche {
 namespace Math {
@@ -12,8 +10,8 @@ namespace Math {
 class Vector3D {
  public:
   // Constructors
-  Vector3D() : x_property(0.0), y_property(0.0), z_property(0.0) {}
-  Vector3D(double x, double y, double z) : x_property(x), y_property(y), z_property(z) {}
+  Vector3D() : x_comp(0.0), y_comp(0.0), z_comp(0.0) {}
+  Vector3D(double x, double y, double z) : x_comp(x), y_comp(y), z_comp(z) {}
 
   // Copy constructor
   Vector3D(const Vector3D& other) = default;
@@ -40,12 +38,12 @@ class Vector3D {
   Vector3D cross(const Vector3D& other) const;
 
   // Accessors
-  inline double x() const { return x_property; }
-  inline double y() const { return y_property; }
-  inline double z() const { return z_property; }
-  inline void set_x(double const x) { x_property = x; }
-  inline void set_y(double const y) { y_property = y; }
-  inline void set_z(double const z) { z_property = z; }
+  inline double x() const { return x_comp; }
+  inline double y() const { return y_comp; }
+  inline double z() const { return z_comp; }
+  inline void set_x(double const x) { x_comp = x; }
+  inline void set_y(double const y) { y_comp = y; }
+  inline void set_z(double const z) { z_comp = z; }
 
   // String representation
   std::string to_string() const;
@@ -58,7 +56,7 @@ class Vector3D {
   static Vector3D UnitZ() { return Vector3D(0.0, 0.0, 1.0); }
 
  private:
-  double x_property, y_property, z_property;
+  double x_comp, y_comp, z_comp;
 };
 
 }  // namespace Math
