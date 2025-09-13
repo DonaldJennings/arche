@@ -44,3 +44,5 @@
 /buildArche
 /buildEngine
 /out/build/x64-Debug
+/buildArcheTest
+/buildCMDLine
