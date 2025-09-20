@@ -13,14 +13,17 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
 option(BUILD_TESTING "Build the testing tree." ON)
 
-# Add engine and app subdirectories
-# Add subdomains as subdirectories
-add_subdirectory(engine/core)
-add_subdirectory(engine/math)
-add_subdirectory(engine/api)
-add_subdirectory(engine/scene)
+# Include the engine backend
+add_subdirectory(engine)
 
+# Include the GUI frontend
+add_subdirectory(gui)
+
+# TODO: This should be removed when the samples are integrated into the GUI
 add_subdirectory(app/samples/01_Particles)
+
+# Include the viewer application
+add_subdirectory(app/viewer)
 
 file(GLOB_RECURSE ALL_SOURCE_FILES "${CMAKE_SOURCE_DIR}/*.cpp" "${CMAKE_SOURCE_DIR}/*.h")
 

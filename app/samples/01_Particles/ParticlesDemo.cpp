@@ -7,10 +7,10 @@
 #include <thread>
 #include <vector>
 
-#include <Config.h>
-#include <SpatialTransform.h>
-#include <Vector3D.h>
-#include <World.h>
+#include <core/Config.h>
+#include <math/SpatialTransform.h>
+#include <scene/World.h>
+#include <math/Vector3D.h>
 
 using Arche::Core::WorldConfig;
 using Arche::Math::SpatialTransform;
