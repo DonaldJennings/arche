@@ -1,7 +1,5 @@
 # Arche Engine
 
-# Arche Engine
-
 ![CMake](https://img.shields.io/badge/build-CMake-blue.svg)  
 ![C++](https://img.shields.io/badge/language-C%2B%2B20-brightgreen.svg)  
 ![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)  
