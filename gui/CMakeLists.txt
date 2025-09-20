@@ -5,6 +5,27 @@ set(ARCHE_GUI_BUNDLE_NAME "arche-gui-bundle")
 
 project(${ARCHE_GUI_NAME})
 
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/imgui CACHE PATH "Path to ImGui source")
+
+add_library(IMGUI STATIC 
+    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_DIR}/imgui_demo.cpp
+    ${IMGUI_DIR}/imgui_draw.cpp
+    ${IMGUI_DIR}/imgui_tables.cpp
+    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+)
+
+target_include_directories(IMGUI PUBLIC 
+	${IMGUI_DIR} 
+	${IMGUI_DIR}/backends
+)
+
+find_package(OpenGL REQUIRED)
+
+target_link_libraries(IMGUI PUBLIC glfw OpenGL::GL)
+
 add_subdirectory(core)
 add_subdirectory(backends/imgui)
 
@@ -23,5 +44,6 @@ target_link_libraries(arche-gui-bundle INTERFACE
     arche::gui-panel-metrics
     arche::gui-panel-viewport2D
 )
+
 
 add_library(arche::gui-bundle ALIAS arche-gui-bundle)

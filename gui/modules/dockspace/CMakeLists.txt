@@ -13,4 +13,6 @@ target_include_directories(${DOCKSPACE_PANEL_NAME} PUBLIC
 
 target_link_libraries(${DOCKSPACE_PANEL_NAME} PUBLIC arche::gui-core arche::gui-backend-imgui)
 
+set_target_properties(${DOCKSPACE_PANEL_NAME} PROPERTIES FOLDER "GUI/Panels")
+
 add_library(arche::gui-panel-dockspace ALIAS ${DOCKSPACE_PANEL_NAME})

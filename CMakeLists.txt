@@ -17,6 +17,8 @@ option(BUILD_TESTING "Build the testing tree." ON)
 add_subdirectory(engine)
 
 # Include the GUI frontend
+add_subdirectory(Tools/GLFW)
+
 add_subdirectory(gui)
 
 # TODO: This should be removed when the samples are integrated into the GUI
