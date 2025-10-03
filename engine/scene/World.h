@@ -46,10 +46,14 @@ namespace Arche {
                 stepDuration_ = duration;
             }
 
+            double simulationTime() const { return simulationTime_; }
+            Arche::Math::Vector3D gravity() const { return gravity_; };
+
           private:
             std::vector<Particle> particles_;
             Arche::Math::Vector3D gravity_;
             float stepDuration_ = 1.0f / 60.0f; // Default to 60 Hz
+            double simulationTime_;
         };
     }
 }

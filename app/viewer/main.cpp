@@ -109,12 +109,11 @@ int main() {
 
         config.stepDuration = 1.0f / 60.0f;
         config.gravity = Arche::Math::Vector3D(0.0f, 98.1f, 0.0f); // Gravity pointing downwards
+        auto simulatedWorld{Arche::Scene::World::Create(config)};
 
         panels.RegisterPanel(std::make_shared<Arche::GUI::DockspacePanel>());
         panels.RegisterPanel(std::make_shared<Arche::GUI::LogPanel>(guiLoggerPtr));
-        panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>());
-
-        auto simulatedWorld{Arche::Scene::World::Create(config)};
+        panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>(simulatedWorld.get()));
 
         static auto guiLogSink{std::make_shared<Arche::GUI::GUILogSink>()};
 

@@ -57,6 +57,8 @@ namespace Arche {
             for (auto &p : particles_) {
                 integrateParticle(p, gravity_, stepDuration_);
             }
+
+            simulationTime_ += stepDuration_;
         }
 
         WorldView World::view() const {

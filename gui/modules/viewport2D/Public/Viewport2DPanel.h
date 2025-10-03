@@ -45,13 +45,31 @@ namespace Arche {
                 if (ImGui::Button("Reset")) {
                     Reset();
                 }
-
                 if (ImGui::Button("Add Particle")) {
-                    Arche::Math::SpatialTransform transform;
-                    transform.setPosition(Arche::Math::Vector3D(canvasSize.x / 2, canvasSize.y / 2, 0.0f));
-                    size_t numberOfParticlesBefore = world->view().bodies.size();
-                    world->createParticle(transform, 1.0f);
-                    assert(world->view().bodies.size() == numberOfParticlesBefore + 1);
+                    ImGui::OpenPopup("AddParticlePopup");
+                }
+
+                if (ImGui::BeginPopupModal("AddParticlePopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+                    ImGui::Text("Add a new particle");
+
+                    static float posX = 0.0f, posY = 0.0f, mass = 1.0f;
+                    ImGui::InputFloat("Position X: ", &posX);
+                    ImGui::InputFloat("Position Y: ", &posY);
+                    ImGui::InputFloat("Mass: ", &mass);
+
+                    if (ImGui::Button("Create"))
+                    {
+                        Arche::Math::SpatialTransform transform;
+                        transform.setPosition(Arche::Math::Vector3D(posX, posY, 0.0f));
+                        world->createParticle(transform, mass);
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel"))
+                    {
+                        ImGui::CloseCurrentPopup();
+                    }
+                    ImGui::EndPopup();
                 }
 
                 ImGui::End();
