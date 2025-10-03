@@ -1,4 +1,7 @@
 #include "World.h"
+#include <Diagnostics.h>
+
+#include "GlobalLogger.h"
 
 namespace Arche {
     namespace Scene {
@@ -19,9 +22,11 @@ namespace Arche {
 
         std::unique_ptr<World>
         World::Create(const Arche::Core::WorldConfig &config) {
+
+            ARCHE_LOG_INFO(*Arche::Core::GetGlobalLogger(), "Creating new physics world");
+
             auto world = std::make_unique<World>();
-            world->gravity_ =
-                Arche::Math::Vector3D(0.0, -9.81, 0.0); // Default gravity
+            world->gravity_ = config.gravity;
             world->setStepDuration(config.stepDuration);
             return world;
         }
@@ -29,6 +34,13 @@ namespace Arche {
         std::uint32_t
         World::createParticle(Arche::Math::SpatialTransform transform,
                               float mass) {
+
+            std::ostringstream oss;
+            oss << "Creating new particle at position ("
+                << transform.getPosition().x() << ", "
+                << transform.getPosition().y() << ", " << transform.getPosition().z() << ") with mass " << mass;
+            ARCHE_LOG_INFO(*Arche::Core::GetGlobalLogger(), oss.str());
+
             Particle p;
             p.transform = std::move(transform);
             p.velocity = Arche::Math::Vector3D(0.0, 0.0, 0.0);

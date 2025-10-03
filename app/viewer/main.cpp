@@ -7,7 +7,15 @@
 #include <GLFW/glfw3.h>
 #include <imgui.h>
 
+#include "DockspacePanel.h"
+#include "GUILogSink.h"
 #include "ImGuiBackend.h"
+#include "LogPanel.h"
+#include "MetricsPanel.h"
+#include "PanelFactory.h"
+#include "Viewport2DPanel.h"
+
+#include "GlobalLogger.h"
 
 namespace Arche {
     namespace Application {
@@ -83,20 +91,39 @@ namespace Arche {
     } // namespace Application
 } // namespace Arche
 
-void MainWindow() {
-    ImGui::Begin("Hello, world!");
-    ImGui::TextUnformatted("GUI is running...");
-    ImGui::Separator();
-    ImGui::Text("Framerate: %.1f FPS", ImGui::GetIO().Framerate);
-    ImGui::End();
-}
 int main() {
     try {
+
+        auto guiLogger{std::make_unique<Arche::GUI::GUILogSink>()};
+        auto *guiLoggerPtr{guiLogger.get()};
+
+        Arche::Core::GetGlobalLogger()->addSink(std::move(guiLogger));
+
         Arche::Application::GLFWInitialiser glfwInitialiser;
         std::shared_ptr<Arche::Application::GLFWWindow_RAII> window{std::make_shared<Arche::Application::GLFWWindow_RAII>(1280, 720, "Arche Engine")};
         Arche::Application::GUIRunner guiRunner(window);
 
-        guiRunner.setDockController([]() { MainWindow(); });
+        Arche::GUI::PanelRegistry panels;
+
+        Arche::Core::WorldConfig config;
+
+        config.stepDuration = 1.0f / 60.0f;
+        config.gravity = Arche::Math::Vector3D(0.0f, 98.1f, 0.0f); // Gravity pointing downwards
+
+        panels.RegisterPanel(std::make_shared<Arche::GUI::DockspacePanel>());
+        panels.RegisterPanel(std::make_shared<Arche::GUI::LogPanel>(guiLoggerPtr));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>());
+
+        auto simulatedWorld{Arche::Scene::World::Create(config)};
+
+        static auto guiLogSink{std::make_shared<Arche::GUI::GUILogSink>()};
+
+        panels.RegisterPanel(std::make_shared<Arche::GUI::Viewport2DPanel>(std::move(simulatedWorld)));
+
+
+        guiRunner.setDockController([&]() {
+            panels.DrawPanels();
+        });
 
         while (!glfwWindowShouldClose(*window)) {
             glfwPollEvents();

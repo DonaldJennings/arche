@@ -35,6 +35,7 @@ namespace Arche {
           public:
             static std::unique_ptr<World> Create(Arche::Core::WorldConfig const &config);
 
+            World() = default;
             std::uint32_t createParticle(Arche::Math::SpatialTransform transform, float mass);
             void setGravity(Arche::Math::Vector3D const &gravity);
             void step();

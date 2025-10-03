@@ -11,5 +11,7 @@ target_include_directories(${GUI_CORE_NAME} PUBLIC "Public")
 
 set_target_properties(${GUI_CORE_NAME} PROPERTIES FOLDER "GUI")
 
+target_link_libraries(${GUI_CORE_NAME} PUBLIC arche::engine arche::gui-backend-imgui)
+
 # Add alias for easier linking
 add_library(arche::gui-core ALIAS ${GUI_CORE_NAME})

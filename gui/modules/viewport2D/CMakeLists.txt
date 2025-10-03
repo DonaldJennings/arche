@@ -11,7 +11,7 @@ target_include_directories(${VIEWPORT_2D_PANEL_NAME} PUBLIC
     Public
 )
 
-target_link_libraries(${VIEWPORT_2D_PANEL_NAME} PUBLIC arche::gui-core arche::gui-backend-imgui)
+target_link_libraries(${VIEWPORT_2D_PANEL_NAME} PUBLIC arche::gui-core arche::gui-backend-imgui arche::engine)
 
 set_target_properties(${VIEWPORT_2D_PANEL_NAME} PROPERTIES FOLDER "GUI/Panels")
 
