@@ -53,13 +53,9 @@ void Viewport3DPanel::Draw() {
 
     // Camera handling: singleton controller attached to WorldSystem's camera
     static CameraController controller;
-    auto sceneCam = worldSystem->getSceneCamera();
-    if (sceneCam) {
-        controller.attachCamera(sceneCam);
-    }
 
     // Show camera world position at top-left of canvas
-    auto camPos = sceneCam->GetPosition();
+    auto camPos = Arche::Math::Vector3D{0.0, 0.0, 0.0};
     char buf[128];
     snprintf(buf, sizeof(buf), "Cam: X=%.2f Y=%.2f Z=%.2f", camPos.x(), camPos.y(), camPos.z());
     

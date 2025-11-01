@@ -7,6 +7,7 @@ add_subdirectory(core)
 add_subdirectory(math)
 add_subdirectory(api)
 add_subdirectory(scene)
+add_subdirectory(renderer)
 
 add_library(arche-engine-bundle INTERFACE)
 
@@ -15,6 +16,7 @@ target_link_libraries(arche-engine-bundle INTERFACE
     arche::engine-math
     arche::engine-api
     arche::engine-scene
+    arche::engine-renderer
 )
 
 add_library(arche::engine ALIAS arche-engine-bundle)
