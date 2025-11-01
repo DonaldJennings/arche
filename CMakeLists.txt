@@ -19,13 +19,8 @@ add_subdirectory(engine)
 # Include the GUI frontend
 add_subdirectory(Tools/GLFW)
 
-add_subdirectory(gui)
+add_subdirectory(app)
 
-# TODO: This should be removed when the samples are integrated into the GUI
-add_subdirectory(app/samples/01_Particles)
-
-# Include the viewer application
-add_subdirectory(app/viewer)
 
 file(GLOB_RECURSE ALL_SOURCE_FILES "${CMAKE_SOURCE_DIR}/*.cpp" "${CMAKE_SOURCE_DIR}/*.h")
 

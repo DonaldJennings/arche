@@ -1,7 +1,7 @@
 set(CORE_TARGET_NAME "arche-engine-core")
 
-file(GLOB_RECURSE CORE_SOURCES "*.cpp")
-file(GLOB_RECURSE CORE_HEADERS "*.h")
+file(GLOB_RECURSE CORE_SOURCES "Private/*.cpp")
+file(GLOB_RECURSE CORE_HEADERS "Public/*.h")
 
 add_library(${CORE_TARGET_NAME} STATIC ${CORE_SOURCES} ${CORE_HEADERS})
 

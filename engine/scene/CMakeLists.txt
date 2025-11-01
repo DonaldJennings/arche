@@ -1,7 +1,7 @@
 set(SCENE_TARGET_NAME "arche-engine-scene")
 
-file(GLOB_RECURSE SCENE_SOURCES "*.cpp")
-file(GLOB_RECURSE SCENE_HEADERS "*.h")
+file(GLOB_RECURSE SCENE_SOURCES "Private/*.cpp")
+file(GLOB_RECURSE SCENE_HEADERS "Public/*.h")
 
 add_library(${SCENE_TARGET_NAME} STATIC ${SCENE_SOURCES} ${SCENE_HEADERS})
 

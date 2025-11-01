@@ -10,7 +10,7 @@ using Arche::Math::SpatialTransform;
 using Arche::Math::Vector3D;
 using Arche::Core::WorldConfig;
 
-TEST_CASE("World integration kernel updates particle under gravity", "[world][integration]") {
+TEST_CASE("World integration kernel updates particle under gravity", "[worldContainer][integration]") {
     WorldConfig config;
     config.stepDuration = 1.0f; // 1 second timestep for easy math
     auto world = World::Create(config);

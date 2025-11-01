@@ -1,7 +1,7 @@
 set(MATH_TARGET_NAME "arche-engine-math")
 
-file(GLOB_RECURSE MATH_SOURCES "*.cpp")
-file(GLOB_RECURSE MATH_HEADERS "*.h")
+file(GLOB_RECURSE MATH_SOURCES "Private/*.cpp")
+file(GLOB_RECURSE MATH_HEADERS "Public/*.h")
 
 add_library(${MATH_TARGET_NAME} STATIC ${MATH_SOURCES} ${MATH_HEADERS})
 
