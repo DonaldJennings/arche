@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../math/Vector3D.h"
+#include "Vector3D.h"
+
 namespace Arche {
     namespace Core {
         struct WorldConfig {

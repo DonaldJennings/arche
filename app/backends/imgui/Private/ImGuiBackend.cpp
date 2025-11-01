@@ -1,10 +1,11 @@
-
 #include "ImGuiBackend.h"
 
 #include <GLFW/glfw3.h>
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
 #include <imgui.h>
+
+#include "ImGuiFontManager.h"
 
 namespace Arche {
     namespace GUI {
@@ -30,6 +31,15 @@ namespace Arche {
             ImGui_ImplGlfw_InitForOpenGL(mainWindow, true);
             ImGui_ImplOpenGL3_Init("#version 330");
 
+            // Rebuild fonts at the platform DPI so text renders crisply on high-DPI displays
+            float platformScale = GetPlatformDpiScale();
+            if (!(platformScale > 0.0f)) {
+                // fallback to ImGui framebuffer scale if platform query failed
+                platformScale = io.DisplayFramebufferScale.x;
+            }
+            if (!(platformScale > 0.0f)) platformScale = 1.0f;
+
+            RebuildImGuiFontsForDpi(platformScale);
 
             isInitialised = true;
         }

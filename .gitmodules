@@ -1,8 +1,8 @@
 [submodule "tools/catch2"]
 	path = tools/catch2
 	url = https://github.com/catchorg/Catch2.git
-[submodule "gui/imgui"]
-	path = gui/imgui
+[submodule "tools/imgui"]
+	path = tools/imgui
 	url = https://github.com/ocornut/imgui.git
 [submodule "tools/GLFW"]
 	path = tools/GLFW

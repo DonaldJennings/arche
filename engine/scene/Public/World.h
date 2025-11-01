@@ -5,9 +5,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "../core/WorldConfig.h"
-#include "../math/SpatialTransform.h"
-#include "../math/Vector3D.h"
+#include "WorldConfig.h"
+#include "SpatialTransform.h"
+#include "Vector3D.h"
 
 namespace Arche {
 namespace Scene {

@@ -7,9 +7,10 @@ file(GLOB_RECURSE SOURCE_FILES "Private/*.cpp")
 
 # Create the static library
 add_library(${GUI_CORE_NAME} STATIC ${SOURCE_FILES} ${HEADER_FILES})
+
 target_include_directories(${GUI_CORE_NAME} PUBLIC "Public")
 
-set_target_properties(${GUI_CORE_NAME} PROPERTIES FOLDER "GUI")
+set_target_properties(${GUI_CORE_NAME} PROPERTIES FOLDER "GUI/Core")
 
 target_link_libraries(${GUI_CORE_NAME} PUBLIC arche::engine arche::gui-backend-imgui)
 

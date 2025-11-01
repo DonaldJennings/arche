@@ -5,7 +5,7 @@ file(GLOB_RECURSE MATH_HEADERS "Public/*.h")
 
 add_library(${MATH_TARGET_NAME} STATIC ${MATH_SOURCES} ${MATH_HEADERS})
 
-target_include_directories(${MATH_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(${MATH_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Public)
 
 set_target_properties(${MATH_TARGET_NAME} PROPERTIES FOLDER "Engine/Math")
 

@@ -1,8 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
-#include "math/Quaternion.h"
-#include "math/Vector3D.h"
+#include "Quaternion.h"
+#include "Vector3D.h"
 
 #include <cmath>
 

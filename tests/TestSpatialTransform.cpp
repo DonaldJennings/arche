@@ -1,9 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/catch_approx.hpp>
 
-#include "math/Vector3D.h"
-#include "math/Quaternion.h"
-#include "math/SpatialTransform.h"
+#include "Vector3D.h"
+#include "Quaternion.h"
+#include "SpatialTransform.h"
 
 using Arche::Math::SpatialTransform;
 using Arche::Math::Vector3D;
