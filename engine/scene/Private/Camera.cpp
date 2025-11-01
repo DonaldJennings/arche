@@ -61,18 +61,18 @@ void Camera::setPerspective(double fovY, double aspectRatio, double nearPlane, d
     RecalculateProjectionMatrix();
 }
 
-std::array<double, 16> Camera::GetViewMatrix() const {
+std::array<double, 16> Camera::GetViewMatrix() {
     // Ensure view matrix is up to date
-    const_cast<Camera*>(this)->RecalculateViewMatrix();
+    RecalculateViewMatrix();
     return viewMatrix_;
 }
 
-std::array<double, 16> Camera::GetProjectionMatrix() const {
-    const_cast<Camera*>(this)->RecalculateProjectionMatrix();
+std::array<double, 16> Camera::GetProjectionMatrix() {
+    RecalculateProjectionMatrix();
     return projectionMatrix_;
 }
 
-void Camera::RecalculateViewMatrix() const {
+void Camera::RecalculateViewMatrix() {
     // Compute forward vector from pitch/yaw (degrees)
     const double pitchRad = DegToRad(pitch_);
     const double yawRad = DegToRad(yaw_);
@@ -117,7 +117,7 @@ void Camera::RecalculateViewMatrix() const {
     const_cast<Camera*>(this)->viewMatrix_ = m;
 }
 
-void Camera::RecalculateProjectionMatrix() const {
+void Camera::RecalculateProjectionMatrix() {
     // Perspective projection (column-major)
     const double fovRad = DegToRad(fovY_);
     const double f = 1.0 / std::tan(fovRad * 0.5);
