@@ -96,7 +96,8 @@ namespace Arche {
                 s_appliedDpiScale = dpiScale;
             }
 
-            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+            // Removed ImGuiWindowFlags_NoDocking so other windows can dock into this main window
+            ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar;
             const ImGuiViewport *viewport = ImGui::GetMainViewport();
             ImGui::SetNextWindowPos(viewport->WorkPos);
             ImGui::SetNextWindowSize(viewport->WorkSize);
@@ -108,7 +109,6 @@ namespace Arche {
 
             ImGui::Begin(name.c_str(), nullptr, window_flags);
 
-                            // Draw logo on left
             int lw, lh;
             auto exeDir = GetExecutableDir();
             auto logoPath = (exeDir / "assets" / "logo" / "arche-logo.png").string();

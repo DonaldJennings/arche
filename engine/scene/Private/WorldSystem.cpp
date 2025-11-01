@@ -19,10 +19,18 @@ void WorldSystem::update(float dt) {
 void WorldSystem::shutdown() {
     // Cleanup resources if needed
     world_.reset();
+    sceneCamera_.reset();
 }
 
 std::shared_ptr<World> WorldSystem::getWorld() const {
     return world_;
+}
+
+std::shared_ptr<Camera> WorldSystem::getSceneCamera() {
+    if (!sceneCamera_) {
+        sceneCamera_ = std::make_shared<Camera>();
+    }
+    return sceneCamera_;
 }
 
 } // namespace Scene

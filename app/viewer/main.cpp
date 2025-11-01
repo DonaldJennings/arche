@@ -25,6 +25,7 @@
 #include <GLFWInitialiser.h>
 #include <GLFWWindow_RAII.h>
 #include <GUIRunner.h>
+#include <Viewport3D.h>
 
 int main() {
     try {
@@ -65,6 +66,7 @@ int main() {
         panels.RegisterPanel(std::make_shared<Arche::GUI::LogPanel>(guiLoggerPtr));
         panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::Viewport2DPanel>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::Viewport3DPanel>(context));
 
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() {
