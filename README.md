@@ -1,9 +1,6 @@
-# Arche Engine
+# <img width="1536" height="1024" alt="arche-banner" src="https://github.com/user-attachments/assets/2b027d58-8341-4efb-9a05-e611fad85ab5" />
 
-![CMake](https://img.shields.io/badge/build-CMake-blue.svg)  
-![C++](https://img.shields.io/badge/language-C%2B%2B20-brightgreen.svg)  
-![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)  
-![Platform](https://img.shields.io/badge/platform-cross--platform-lightgrey.svg)
+![CMake](https://img.shields.io/badge/build-CMake-blue.svg) ![C++](https://img.shields.io/badge/language-C%2B%2B20-brightgreen.svg) ![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg) ![Platform](https://img.shields.io/badge/platform-cross--platform-lightgrey.svg)
 
 ---
 
