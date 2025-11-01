@@ -1,38 +1,61 @@
 #include "DockspacePanel.h"
 
-#include <imgui.h>
 #include <Theme.h>
+#include <imgui.h>
 
 #include <memory>
 
-#include <World.h>
 #include <Vector3D.h>
+#include <World.h>
 #include <cmath> // for fabsf
+
+#include "ImageManager.h"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
+#include <filesystem>
+
+static std::filesystem::path GetExecutableDir() {
+#ifdef _WIN32
+    wchar_t buf[MAX_PATH];
+    DWORD len = GetModuleFileNameW(NULL, buf, MAX_PATH);
+    if (len == 0)
+        return std::filesystem::current_path();
+    return std::filesystem::path(buf).parent_path();
+#else
+    char buf[4096];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len != -1) {
+        buf[len] = 0;
+        return std::filesystem::path(buf).parent_path();
+    }
+    return std::filesystem::current_path();
+#endif
+}
 
 namespace Arche {
     namespace GUI {
 
-        DockspacePanel::DockspacePanel(std::shared_ptr<UIContext> contextIn)
-            : name{"Dockspace"}, context(std::move(contextIn)) {}
+        DockspacePanel::DockspacePanel(std::shared_ptr<UIContext> contextIn) : name{"Dockspace"}, context(std::move(contextIn)) {}
 
         void DockspacePanel::Draw() {
             ImGuiIO &io = ImGui::GetIO();
 
             // Attempt to get framebuffer scale first, but fall back to native DPI on Windows
             float dpiScale = io.DisplayFramebufferScale.x;
-            if (!(dpiScale > 0.0f)) dpiScale = 1.0f;
+            if (!(dpiScale > 0.0f))
+                dpiScale = 1.0f;
 
 #ifdef _WIN32
             // If framebuffer scale is effectively 1.0 (backend didn't set it), query Win32 DPI
             if (dpiScale <= 1.01f) {
-                ImGuiViewport* vp = ImGui::GetMainViewport();
+                ImGuiViewport *vp = ImGui::GetMainViewport();
                 UINT dpi = 0;
                 if (vp && vp->PlatformHandle) {
                     HWND hwnd = (HWND)vp->PlatformHandle;
@@ -57,8 +80,8 @@ namespace Arche {
             static float s_appliedDpiScale = 0.0f;
 
             if (!s_initialized) {
-                s_originalStyle = ImGui::GetStyle();       // save the original style
-                s_baseFontScale = io.FontGlobalScale;      // save initial font scale (usually 1.0f)
+                s_originalStyle = ImGui::GetStyle();  // save the original style
+                s_baseFontScale = io.FontGlobalScale; // save initial font scale (usually 1.0f)
                 s_initialized = true;
             }
 
@@ -83,11 +106,21 @@ namespace Arche {
             window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
             window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 
-
             ImGui::Begin(name.c_str(), nullptr, window_flags);
+
+                            // Draw logo on left
+            int lw, lh;
+            auto exeDir = GetExecutableDir();
+            auto logoPath = (exeDir / "assets" / "logo" / "arche-logo.png").string();
+            unsigned int tex = LoadLogoTexture(logoPath, lw, lh);
+            if (tex) {
+                ImGui::Image((void *)(intptr_t)tex, ImVec2(64.0f * dpiScale, 64.0f* dpiScale));
+                ImGui::SameLine();
+            }
 
             // Menu bar: only simple placeholders for Save/Load and a Pre-defined demos submenu.
             if (ImGui::BeginMenuBar()) {
+
                 if (ImGui::BeginMenu("File")) {
                     // Placeholder: Save state (no-op for now)
                     if (ImGui::MenuItem("Save state")) {
@@ -100,8 +133,7 @@ namespace Arche {
                     }
 
                     // Pre-defined demos: keep sample demos here
-                    if (ImGui::BeginMenu("Pre-defined demos"))
-                    {
+                    if (ImGui::BeginMenu("Pre-defined demos")) {
                         if (ImGui::MenuItem("Earth Gravity")) {
                             Arche::Core::WorldConfig config;
                             config.gravity = Arche::Math::Vector3D(0.0f, 9.81f, 0.0f);
@@ -123,7 +155,6 @@ namespace Arche {
                         ImGui::EndMenu();
                     }
                     ImGui::EndMenu();
-
                 }
                 ImGui::EndMenuBar();
             }
@@ -148,19 +179,23 @@ namespace Arche {
             float spacing = style.ItemSpacing.x;
             float totalButtonsW = btnCount * btnSize.x + (btnCount - 1) * spacing;
             float startX = (availW - totalButtonsW) * 0.5f;
-            if (startX < 0.0f) startX = 0.0f;
+            if (startX < 0.0f)
+                startX = 0.0f;
             ImGui::SetCursorPosX(startX);
 
             float startY = (childHeight - btnSize.y) * 0.5f;
-            if (startY > 0.0f) ImGui::SetCursorPosY(startY);
+            if (startY > 0.0f)
+                ImGui::SetCursorPosY(startY);
 
             // Large buttons for Play, Pause, Step, Reset (centered)
             if (ImGui::Button("Play", btnSize)) {
-                if (context) context->runSimulation();
+                if (context)
+                    context->runSimulation();
             }
             ImGui::SameLine();
             if (ImGui::Button("Pause", btnSize)) {
-                if (context) context->pauseSimulation();
+                if (context)
+                    context->pauseSimulation();
             }
             ImGui::SameLine();
             if (ImGui::Button("Step", btnSize)) {

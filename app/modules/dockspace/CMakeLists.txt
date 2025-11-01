@@ -1,4 +1,3 @@
-
 set(DOCKSPACE_PANEL_NAME "arche-gui-panel-dockspace")
 
 add_library(${DOCKSPACE_PANEL_NAME} STATIC
@@ -8,6 +7,11 @@ add_library(${DOCKSPACE_PANEL_NAME} STATIC
 
 target_include_directories(${DOCKSPACE_PANEL_NAME} PUBLIC
     Public
+)
+
+# Make backend private headers available to this target so it can include ImageManager.h
+target_include_directories(${DOCKSPACE_PANEL_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/app/backends/imgui/Private
 )
 
 target_link_libraries(${DOCKSPACE_PANEL_NAME} PUBLIC arche::gui-core arche::gui-backend-imgui)

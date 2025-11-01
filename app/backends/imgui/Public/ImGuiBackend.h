@@ -1,10 +1,10 @@
-
 #ifndef IMGUI_BACKEND_H
 #define IMGUI_BACKEND_H
 
 #include "IGUISystem.h"
 #include "Theme.h"
 
+#include <string>
 struct GLFWwindow;
 
 namespace Arche {
@@ -37,6 +37,10 @@ namespace Arche {
             bool IsSimulationRunning() const { return simulationState == SimulationState::RUNNING; };
 
             void SetDockController(std::function<void()> controller) override { dockController = controller; };
+
+            // Branding helpers
+            void LoadAndSetWindowIcon(const std::string& path);
+            void DrawLogoInMenuBar();
 
           private:
             GLFWwindow *mainWindow;

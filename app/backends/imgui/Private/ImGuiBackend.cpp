@@ -5,7 +5,9 @@
 #include <backends/imgui_impl_opengl3.h>
 #include <imgui.h>
 
+#include "ImageManager.h"
 #include "ImGuiFontManager.h"
+#include <stb_image.h>
 
 namespace Arche {
     namespace GUI {
@@ -30,6 +32,11 @@ namespace Arche {
 
             ImGui_ImplGlfw_InitForOpenGL(mainWindow, true);
             ImGui_ImplOpenGL3_Init("#version 330");
+
+            // set window icon (best effort)
+            if (mainWindow) {
+                SetWindowIconFromFile(mainWindow, "assets/logo/arche-logo.png");
+            }
 
             // Rebuild fonts at the platform DPI so text renders crisply on high-DPI displays
             float platformScale = GetPlatformDpiScale();
@@ -61,8 +68,8 @@ namespace Arche {
             }
         }
 
-        void IMGUIBackend::Render() { 
-            ImGui::Render(); 
+        void IMGUIBackend::Render() {
+            ImGui::Render();
             int displayW, displayH;
 
             glfwGetFramebufferSize(mainWindow, &displayW, &displayH);
@@ -82,8 +89,8 @@ namespace Arche {
         }
 
         std::unique_ptr<IGUISystem> CreateIMGUIBackend(GLFWwindow* mainWindow) {
-			return std::make_unique<IMGUIBackend>(mainWindow);
-		}
+            return std::make_unique<IMGUIBackend>(mainWindow);
+        }
 
     } // namespace GUI
 } // namespace Arche

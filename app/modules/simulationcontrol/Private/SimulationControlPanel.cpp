@@ -28,7 +28,11 @@ namespace Arche {
             if (ImGui::Button("Step", btnSize)) {
                 if (context && context->worldSystem && context->worldSystem->getWorld()) {
                     auto w = context->worldSystem->getWorld();
-                    w->step(w->stepDuration());
+                    float dt = w->stepDuration();
+                    w->step(dt);
+                    if (context && context->logger) {
+                        ARCHE_LOG_INFO(context->logger, "World stepped by " + std::to_string(dt) + " seconds");
+                    }
                 }
             }
             ImGui::SameLine();
@@ -41,6 +45,9 @@ namespace Arche {
                     config.deterministic = true;
                     auto newWorld = Arche::Scene::World::Create(config);
                     context->worldSystem->setWorld(newWorld);
+                    if (context && context->logger) {
+                        ARCHE_LOG_INFO(context->logger, "World has been reset to default configuration");
+                    }
                 }
             }
 

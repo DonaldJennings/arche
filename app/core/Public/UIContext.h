@@ -12,10 +12,19 @@ namespace Arche {
             bool isPaused{true};
 
           public:
-            void pauseSimulation() { isPaused = true; };
-            void runSimulation() { isPaused = false; };
+            void pauseSimulation() { 
+                isPaused = true; 
+                if (logger) ARCHE_LOG_INFO(logger, "Simulation paused"); 
+            };
+            void runSimulation() { 
+                isPaused = false; 
+                if (logger) ARCHE_LOG_INFO(logger, "Simulation started"); 
+            };
             bool simulationIsPaused() const { return isPaused; };
-            void toggleSimulationState() { isPaused = !isPaused; };
+            void toggleSimulationState() { 
+                isPaused = !isPaused; 
+                if (logger) ARCHE_LOG_INFO(logger, isPaused ? "Simulation paused" : "Simulation started"); 
+            };
 
             std::shared_ptr<Arche::Scene::WorldSystem> worldSystem;
             std::shared_ptr<Arche::Core::LoggingService> logger;
