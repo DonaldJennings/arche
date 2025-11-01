@@ -6,6 +6,12 @@ project(ArcheEngine LANGUAGES CXX)
 # Set C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+message("Building BINARY_DIR: ${CMAKE_BINARY_DIR}")
+
+# Ensure executable, static and shared library outputs go to ${CMAKE_BINARY_DIR}/bin
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 # Organize targets in IDEs
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -13,14 +19,32 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
 option(BUILD_TESTING "Build the testing tree." ON)
 
-# Add engine and app subdirectories
-# Add subdomains as subdirectories
-add_subdirectory(engine/core)
-add_subdirectory(engine/math)
-add_subdirectory(engine/api)
-add_subdirectory(engine/scene)
+# Include the engine backend
+add_subdirectory(engine)
 
-add_subdirectory(app/samples/01_Particles)
+# Include the GUI frontend
+add_subdirectory(Tools/GLFW)
+find_package(OpenGL REQUIRED)
+
+set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/imgui)
+
+file(GLOB IMGUI_SOURCES
+    ${IMGUI_DIR}/*.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+)
+
+add_library(IMGUI STATIC ${IMGUI_SOURCES})
+target_include_directories(IMGUI PUBLIC
+    ${IMGUI_DIR}
+    ${IMGUI_DIR}/backends
+)
+
+target_link_libraries(IMGUI PUBLIC glfw OpenGL::GL)
+add_library(arche::imgui ALIAS IMGUI)
+
+add_subdirectory(app)
+
 
 file(GLOB_RECURSE ALL_SOURCE_FILES "${CMAKE_SOURCE_DIR}/*.cpp" "${CMAKE_SOURCE_DIR}/*.h")
 
@@ -32,11 +56,6 @@ if (BUILD_TESTING)
     set_target_properties(Catch2 Catch2WithMain PROPERTIES FOLDER "Tools")
     add_subdirectory(tests)
 endif()
-
-# Set output directories for all targets
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/$<CONFIG>)
 
 # Group config files in a "Config" folder in Solution Explorer
 set(CONFIG_FILES
