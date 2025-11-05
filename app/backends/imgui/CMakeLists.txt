@@ -13,7 +13,6 @@ add_library(${IMGUI_BACKEND_NAME} STATIC
 # Expose includes from Public and also make Private and tools/imgui visible so local headers like stb_image.h can be found
 target_include_directories(${IMGUI_BACKEND_NAME} PUBLIC
     Public
-    ${CMAKE_SOURCE_DIR}/app/imgui
     ${CMAKE_CURRENT_SOURCE_DIR}/Private
     ${CMAKE_SOURCE_DIR}/tools/imgui
     ${stb_SOURCE_DIR} # provide stb headers

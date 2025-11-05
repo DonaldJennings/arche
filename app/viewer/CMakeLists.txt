@@ -11,7 +11,7 @@ target_link_libraries(${ARCHE_GUI_VIEWER} PRIVATE
 
 target_include_directories(${ARCHE_GUI_VIEWER} PRIVATE
     ${CMAKE_SOURCE_DIR}/app/core/Public
-    ${CMAKE_SOURCE_DIR}/app/backend/imgui/Public
+    ${CMAKE_SOURCE_DIR}/app/backends/imgui/Public
     ${CMAKE_SOURCE_DIR}/app/modules
 )
 
