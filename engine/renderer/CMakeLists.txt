@@ -7,7 +7,7 @@ add_library(${SYSTEM_TARGET_NAME} STATIC ${ARCHE_SYSTEM_SOURCES} ${ARCHE_SYSTEM_
 
 target_include_directories(${SYSTEM_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Public)
 
-target_link_libraries(${SYSTEM_TARGET_NAME} PUBLIC arche::engine-math arche::engine-core arche::engine-scene)
+target_link_libraries(${SYSTEM_TARGET_NAME} PUBLIC arche::engine-math arche::engine-core arche::engine-scene PUBLIC arche::glad glfw OpenGL::GL)
 
 set_target_properties(${SYSTEM_TARGET_NAME} PROPERTIES FOLDER "Engine/Renderer")
 

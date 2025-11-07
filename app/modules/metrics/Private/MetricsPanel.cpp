@@ -132,8 +132,8 @@ namespace Arche {
             //ImGui::Separator();
 
             // Existing world info
-            if (context && context->worldSystem && context->worldSystem->getWorld()) {
-                auto world = context->worldSystem->getWorld();
+            if (context && context->worldSystem() && context->worldSystem()->getWorld()) {
+                auto world = context->worldSystem()->getWorld();
                 ImGui::Text("World Simulation Time: %.2f s", world->simulationTime());
 
                 auto view{world->view()};

@@ -1,3 +1,4 @@
+#pragma once
 #include "Viewport3D.h"
 
 #include <imgui.h>
@@ -10,6 +11,23 @@
 #include <Camera.h>
 
 #include <memory>
+#include <vector>
+#include <optional>
+#include <algorithm>
+#include <sstream>
+
+namespace {
+    struct EditState {
+        double posX = 0, posY = 0, mass = 1, scale = 1;
+        std::uint64_t editingId = 0;
+    };
+
+    std::optional<std::uint64_t> selectedBodyId;
+    std::optional<EditState> editState;
+    ImVec2 cameraOffset{0.0f, 0.0f};
+
+    inline ImVec2 ImVec2Subtract(const ImVec2 &a, const ImVec2 &b) { return ImVec2(a.x - b.x, a.y - b.y); }
+} // anonymous
 
 namespace Arche {
 namespace GUI {
@@ -22,8 +40,19 @@ Viewport3DPanel::Viewport3DPanel(std::shared_ptr<Arche::GUI::UIContext> panelCon
 void Viewport3DPanel::Draw() {
     ImGui::Begin(name.c_str(), nullptr, ImGuiWindowFlags_None);
 
+        auto camera = context->renderer()->getAttachedCamera();
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - 200.0f);
+        ImGui::Text("Camera Pos: (%.1f, %.1f, %.1f)", camera->GetPosition().x(), camera->GetPosition().y(),
+                    camera->GetPosition().z());
+
+    // Determine UI scale for high-DPI displays (use framebuffer scale)
+    ImGuiIO &io = ImGui::GetIO();
+    float dpiScale = io.DisplayFramebufferScale.x;
+    if (!(dpiScale > 0.0f)) dpiScale = 1.0f;
+    float uiScale = dpiScale;
+
     // Access world system
-    auto worldSystem = context->worldSystem;
+    auto worldSystem = context->worldSystem();
     if (!worldSystem) {
         ImGui::Text("World system not available.");
         ImGui::End();
@@ -44,77 +73,125 @@ void Viewport3DPanel::Draw() {
     if (canvasSize.y < 50.0f) canvasSize.y = 50.0f;
     ImVec2 canvasP1 = ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y);
 
-    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImDrawList *drawList = ImGui::GetWindowDrawList();
 
-    // Background
+    // Background (under renderer image)
     ImU32 bg = IM_COL32(30, 30, 40, 255);
     drawList->AddRectFilled(canvasP0, canvasP1, bg);
     drawList->AddRect(canvasP0, canvasP1, IM_COL32(80,80,90,255), 0.0f, 0, 1.0f);
 
-    // Camera handling: singleton controller attached to WorldSystem's camera
-    static CameraController controller;
+    // Draw renderer texture (if any) clipped to canvas
+    if (context && context->renderer()) {
+        unsigned int tex = context->renderer()->getRenderTexture();
+        // resize handling (recreate FBO if canvas size changed)
+        int rw = static_cast<int>(canvasSize.x);
+        int rh = static_cast<int>(canvasSize.y);
+        if (rw > 0 && rh > 0 && (context->renderer()->getWidth() != rw || context->renderer()->getHeight() != rh)) {
+            context->renderer()->setViewportSize(rw, rh);
+            context->renderer()->recreateFrameBuffer();
 
-    // Show camera world position at top-left of canvas
-    auto camPos = Arche::Math::Vector3D{0.0, 0.0, 0.0};
-    char buf[128];
-    snprintf(buf, sizeof(buf), "Cam: X=%.2f Y=%.2f Z=%.2f", camPos.x(), camPos.y(), camPos.z());
-    
-    // Print pitch / yaw angles as degrees
-    snprintf(buf + strlen(buf), sizeof(buf) - strlen(buf), " Pitch=%.1f Yaw=%.1f", controller.getPitchDegrees(), controller.getYawDegrees());
-    drawList->AddText(ImVec2(canvasP0.x + 6, canvasP0.y + 6), IM_COL32(220,220,220,255), buf);
-
-    // Keyboard input controls (when viewport is focused)
-    ImGuiIO& io = ImGui::GetIO();
-    float dt = io.DeltaTime > 0.0f ? io.DeltaTime : (1.0f / 60.0f);
-
-    if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
-        // WASD for pan in X/Y (screen plane)
-        float panX = 0.0f, panY = 0.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_W)) panY -= 1.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_S)) panY += 1.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_A)) panX -= 1.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_D)) panX += 1.0f;
-
-        // Shift / Ctrl for vertical movement
-        float vert = 0.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift)) vert += 1.0f; // up
-        if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl)  || ImGui::IsKeyDown(ImGuiKey_RightCtrl))  vert -= 1.0f; // down
-
-        // Arrow keys for rotation (yaw / pitch)
-        float rotYaw = 0.0f, rotPitch = 0.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_LeftArrow))  rotYaw -= 1.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_RightArrow)) rotYaw += 1.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_UpArrow))    rotPitch -= 1.0f;
-        if (ImGui::IsKeyDown(ImGuiKey_DownArrow))  rotPitch += 1.0f;
-
-        // Movement scaling
-        const float keyboardPanSpeed = 5.0f;    // units per second (multiplied by controller.pan semantics)
-        const float keyboardVertSpeed = 3.0f;   // vertical units per second
-        const float keyboardRotSpeed = 3.0f;    // arbitrary unit per second processed by controller.rotate
-
-        if (panX != 0.0f || panY != 0.0f) {
-            controller.pan(panX * keyboardPanSpeed * dt, panY * keyboardPanSpeed * dt);
+            // Immediately render current world into new framebuffer so UI samples valid pixels
+            if (world) {
+                context->renderer()->render(world->view().bodies);
+            }
         }
 
-        if (vert != 0.0f) {
-            // use pan's Y component to move target up/down (second parameter controls some vertical component)
-            controller.pan(0.0f, -vert * keyboardVertSpeed * dt);
-        }
-
-        if (rotYaw != 0.0f || rotPitch != 0.0f) {
-            // controller.rotate multiplies incoming values by rotateSpeed internally; pass a scaled value
-            controller.rotate(rotYaw * keyboardRotSpeed * dt, rotPitch * keyboardRotSpeed * dt);
-        }
-
-        // Apply updates to camera if any input happened
-        if (panX != 0.0f || panY != 0.0f || vert != 0.0f || rotYaw != 0.0f || rotPitch != 0.0f) {
-            controller.updateCamera();
+        if (tex != 0) {
+            drawList->PushClipRect(canvasP0, canvasP1, true);
+            ImVec2 uv0(0.0f, 1.0f);
+            ImVec2 uv1(1.0f, 0.0f);
+            drawList->AddImage((void*)(intptr_t)tex, canvasP0, canvasP1, uv0, uv1);
+            drawList->PopClipRect();
         }
     }
 
-    // Simple placeholder: display text and camera controls
-    ImVec2 textPos = ImVec2(canvasP0.x + 10.0f, canvasP0.y + 30.0f);
-    drawList->AddText(textPos, IM_COL32(220,220,220,255), "3D viewport - basic placeholder");
+    // --- Interaction: selection, add, edit, draw markers ---
+    ImVec2 mousePos{ImGui::GetIO().MousePos};
+    bool mouseClicked{ImGui::IsMouseClicked(0)};
+
+    auto view = world->view();
+
+    // Draw bodies overlays and handle selection (clip to canvas)
+    drawList->PushClipRect(canvasP0, canvasP1, true);
+
+    for (const auto &body : view.bodies) {
+        // Map world/object pos to canvas screen pos (same simple mapping as 2D POC)
+        ImVec2 pos = ImVec2(
+            canvasP0.x + static_cast<float>(body.transform.getPosition().x()) - cameraOffset.x,
+            canvasP0.y + static_cast<float>(body.transform.getPosition().y()) - cameraOffset.y
+        );
+
+        float baseRadius = 25.0f * uiScale;
+        float scale = static_cast<float>(body.transform.getScale().x());
+        float radius = baseRadius * scale;
+
+        // selection hit test
+        if (mouseClicked && ImGui::IsWindowHovered() && ImLengthSqr(ImVec2Subtract(mousePos, pos)) < radius * radius) {
+            std::ostringstream oss;
+            oss << "Clicked on particle id " << body.id << " at position (" << body.transform.getPosition().x() << ", " << body.transform.getPosition().y() << ")";
+            ARCHE_LOG_INFO(context->logger(), oss.str());
+            selectedBodyId = body.id;
+            auto p = body.transform.getPosition();
+            editState = EditState{p.x(), p.y(), body.mass, body.transform.getScale().x(), body.id};
+        }
+    }
+
+    drawList->PopClipRect();
+
+    // Context menu: Add Particle
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+        ImGui::OpenPopup("ViewportContextMenu");
+    }
+
+    if (ImGui::BeginPopup("ViewportContextMenu")) {
+        if (ImGui::MenuItem("Add Particle Here")) {
+            ImVec2 relPos = ImVec2(mousePos.x - canvasP0.x + cameraOffset.x, mousePos.y - canvasP0.y + cameraOffset.y);
+            Arche::Math::SpatialTransform transform;
+            transform.setPosition(Arche::Math::Vector3D(relPos.x, relPos.y, 0.0f));
+            world->createParticle(transform, 1.0f);
+        }
+        ImGui::EndPopup();
+    }
+
+    // If selection exists, open edit popup
+    auto selectedIt = selectedBodyId ? std::find_if(view.bodies.begin(), view.bodies.end(), [&](const auto &b) { return b.id == *selectedBodyId; }) : view.bodies.end();
+
+    if (selectedBodyId && selectedIt != view.bodies.end()) {
+        ImGui::OpenPopup("EditObjectPopup");
+    }
+
+    if (ImGui::BeginPopupModal("EditObjectPopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (selectedIt != view.bodies.end() && editState && editState->editingId == selectedIt->id) {
+            ImGui::InputDouble("Position X: ", &editState->posX);
+            ImGui::InputDouble("Position Y: ", &editState->posY);
+            ImGui::InputDouble("Mass: ", &editState->mass);
+            ImGui::InputDouble("Scale: ", &editState->scale);
+
+            if (ImGui::Button("Apply")) {
+                world->setObjectPosition(selectedIt->id, Arche::Math::Vector3D(editState->posX, editState->posY, 0.0f));
+                world->setObjectMass(selectedIt->id, editState->mass);
+                world->setObjectScale(selectedIt->id, editState->scale);
+                ImGui::CloseCurrentPopup();
+                selectedBodyId.reset();
+                editState.reset();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel")) {
+                ImGui::CloseCurrentPopup();
+                selectedBodyId.reset();
+                editState.reset();
+            }
+        } else {
+            ImGui::CloseCurrentPopup();
+            selectedBodyId.reset();
+            editState.reset();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Camera/keyboard panning (same as 2D)
+    ImGuiIO& io2 = ImGui::GetIO();
+    bool viewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
     ImGui::End();
 }
@@ -122,7 +199,7 @@ void Viewport3DPanel::Draw() {
 std::string_view Viewport3DPanel::GetName() const { return name; }
 
 void Viewport3DPanel::Reset() {
-    ARCHE_LOG_WARNING(context->logger, "Resetting 3D viewport (no-op)");
+    ARCHE_LOG_WARNING(context->logger(), "Resetting 3D viewport (no-op)");
 }
 
 } // namespace GUI

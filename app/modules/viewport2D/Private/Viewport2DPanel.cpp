@@ -41,7 +41,7 @@ namespace Arche {
             float uiScale = dpiScale; // use framebuffer scale; if you want min 1.0: std::max(1.0f, dpiScale)
 
             // Access the world through the WorldSystem in the UIContext
-            auto worldSystem = context->worldSystem;
+            auto worldSystem = context->worldSystem();
             if (!worldSystem) {
                 ImGui::Text("World system not available.");
                 ImGui::End();
@@ -98,7 +98,7 @@ namespace Arche {
                 if (mouseClicked && ImGui::IsWindowHovered() && ImLengthSqr(ImVec2Subtract(mousePos, pos)) < radius * radius) {
                     std::ostringstream oss;
                     oss << "Clicked on particle id " << body.id << " at position (" << body.transform.getPosition().x() << ", " << body.transform.getPosition().y() << ")";
-                    ARCHE_LOG_INFO(context->logger, oss.str());
+                    ARCHE_LOG_INFO(context->logger(), oss.str());
                     selectedBodyId = body.id;
                     // Initialize edit state for this body
                     auto p = body.transform.getPosition();
@@ -188,7 +188,7 @@ namespace Arche {
         }
 
         void Viewport2DPanel::Reset() {
-            ARCHE_LOG_WARNING(context->logger, "Resetting the world");
+            ARCHE_LOG_WARNING(context->logger(), "Resetting the world");
             Arche::Core::WorldConfig config;
             config.gravity = Arche::Math::Vector3D(0.0f, 98.1f, 0.0f); // Gravity pointing downwards
             config.stepDuration = 1.0f / 60.0f;                        // 60 Hz
@@ -196,7 +196,7 @@ namespace Arche {
             config.deterministic = true;
 
             auto newWorld = Arche::Scene::World::Create(config);
-            context->worldSystem->setWorld(newWorld);
+            context->worldSystem()->setWorld(newWorld);
         }
 
     } // namespace GUI

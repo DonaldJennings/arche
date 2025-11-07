@@ -1,5 +1,5 @@
 BasedOnStyle: LLVM
-ColumnLimit: 200
+ColumnLimit: 120
 BraceWrapping:
   AfterClass:      true
   AfterControlStatement: true

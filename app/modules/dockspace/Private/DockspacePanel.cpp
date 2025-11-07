@@ -112,11 +112,11 @@ namespace Arche {
             int lw, lh;
             auto exeDir = GetExecutableDir();
             auto logoPath = (exeDir / "assets" / "logo" / "arche-logo.png").string();
-            unsigned int tex = LoadLogoTexture(logoPath, lw, lh);
-            if (tex) {
-                ImGui::Image((void *)(intptr_t)tex, ImVec2(64.0f * dpiScale, 64.0f* dpiScale));
-                ImGui::SameLine();
-            }
+            // unsigned int tex = LoadLogoTexture(logoPath, lw, lh);
+            // if (tex) {
+            //     ImGui::Image((void *)(intptr_t)tex, ImVec2(64.0f * dpiScale, 64.0f* dpiScale));
+            //     ImGui::SameLine();
+            // }
 
             // Menu bar: only simple placeholders for Save/Load and a Pre-defined demos submenu.
             if (ImGui::BeginMenuBar()) {
@@ -139,7 +139,7 @@ namespace Arche {
                             config.gravity = Arche::Math::Vector3D(0.0f, 9.81f, 0.0f);
                             config.stepDuration = 1.0f / 60.0f;
                             auto newWorld = Arche::Scene::World::Create(config);
-                            context->worldSystem->setWorld(newWorld);
+                            context->worldSystem()->setWorld(newWorld);
                             RunParticlesDemo(newWorld);
                         }
 
@@ -148,7 +148,7 @@ namespace Arche {
                             config.gravity = Arche::Math::Vector3D(0.0f, 1.62f, 0.0f);
                             config.stepDuration = 1.0f / 60.0f;
                             auto newWorld = Arche::Scene::World::Create(config);
-                            context->worldSystem->setWorld(newWorld);
+                            context->worldSystem()->setWorld(newWorld);
                             RunParticlesDemo(newWorld);
                         }
 
@@ -199,8 +199,8 @@ namespace Arche {
             }
             ImGui::SameLine();
             if (ImGui::Button("Step", btnSize)) {
-                if (context && context->worldSystem && context->worldSystem->getWorld()) {
-                    auto w = context->worldSystem->getWorld();
+                if (context && context->worldSystem() && context->worldSystem()->getWorld()) {
+                    auto w = context->worldSystem()->getWorld();
                     w->step(w->stepDuration());
                 }
             }
@@ -213,7 +213,7 @@ namespace Arche {
                     config.maxSubSteps = 5;
                     config.deterministic = true;
                     auto newWorld = Arche::Scene::World::Create(config);
-                    context->worldSystem->setWorld(newWorld);
+                    context->worldSystem()->setWorld(newWorld);
                 }
             }
 

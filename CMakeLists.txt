@@ -19,12 +19,14 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
 option(BUILD_TESTING "Build the testing tree." ON)
 
+add_subdirectory(tools/glad)
+add_subdirectory(tools/GLFW)
+
+find_package(OpenGL REQUIRED)
+
 # Include the engine backend
 add_subdirectory(engine)
 
-# Include the GUI frontend
-add_subdirectory(Tools/GLFW)
-find_package(OpenGL REQUIRED)
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/imgui)
 
@@ -34,14 +36,14 @@ file(GLOB IMGUI_SOURCES
     ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
 )
 
-add_library(IMGUI STATIC ${IMGUI_SOURCES})
-target_include_directories(IMGUI PUBLIC
+add_library(arche-imgui STATIC ${IMGUI_SOURCES})
+target_include_directories(arche-imgui PUBLIC
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
 
-target_link_libraries(IMGUI PUBLIC glfw OpenGL::GL)
-add_library(arche::imgui ALIAS IMGUI)
+target_link_libraries(arche-imgui PUBLIC glfw OpenGL::GL)
+add_library(arche::imgui ALIAS arche-imgui)
 
 add_subdirectory(app)
 

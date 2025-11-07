@@ -21,7 +21,7 @@ target_include_directories(${IMGUI_BACKEND_NAME} PUBLIC
 
 
 # Link dependencies
-target_link_libraries(${IMGUI_BACKEND_NAME} PUBLIC arche::gui-core IMGUI)
+target_link_libraries(${IMGUI_BACKEND_NAME} PUBLIC arche::gui-core arche::imgui)
 
 # Link GLEW if available (ImageManager uses <GL/glew.h>)
 find_package(GLEW)
