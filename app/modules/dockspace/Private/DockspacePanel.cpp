@@ -5,8 +5,6 @@
 
 #include <memory>
 
-#include <Vector3D.h>
-#include <World.h>
 #include <cmath> // for fabsf
 
 #include "ImageManager.h"
@@ -132,28 +130,6 @@ namespace Arche {
                         ImGui::EndMenu();
                     }
 
-                    // Pre-defined demos: keep sample demos here
-                    if (ImGui::BeginMenu("Pre-defined demos")) {
-                        if (ImGui::MenuItem("Earth Gravity")) {
-                            Arche::Core::WorldConfig config;
-                            config.gravity = Arche::Math::Vector3D(0.0f, 9.81f, 0.0f);
-                            config.stepDuration = 1.0f / 60.0f;
-                            auto newWorld = Arche::Scene::World::Create(config);
-                            context->worldSystem()->setWorld(newWorld);
-                            RunParticlesDemo(newWorld);
-                        }
-
-                        if (ImGui::MenuItem("Moon Gravity")) {
-                            Arche::Core::WorldConfig config;
-                            config.gravity = Arche::Math::Vector3D(0.0f, 1.62f, 0.0f);
-                            config.stepDuration = 1.0f / 60.0f;
-                            auto newWorld = Arche::Scene::World::Create(config);
-                            context->worldSystem()->setWorld(newWorld);
-                            RunParticlesDemo(newWorld);
-                        }
-
-                        ImGui::EndMenu();
-                    }
                     ImGui::EndMenu();
                 }
                 ImGui::EndMenuBar();
@@ -198,22 +174,9 @@ namespace Arche {
                     context->pauseSimulation();
             }
             ImGui::SameLine();
-            if (ImGui::Button("Step", btnSize)) {
-                if (context && context->worldSystem() && context->worldSystem()->getWorld()) {
-                    auto w = context->worldSystem()->getWorld();
-                    w->step(w->stepDuration());
-                }
-            }
-            ImGui::SameLine();
             if (ImGui::Button("Reset", btnSize)) {
                 if (context) {
-                    Arche::Core::WorldConfig config;
-                    config.gravity = Arche::Math::Vector3D(0.0f, 98.1f, 0.0f);
-                    config.stepDuration = 1.0f / 60.0f;
-                    config.maxSubSteps = 5;
-                    config.deterministic = true;
-                    auto newWorld = Arche::Scene::World::Create(config);
-                    context->worldSystem()->setWorld(newWorld);
+                    context->worldSystem()->reset();
                 }
             }
 
@@ -227,19 +190,6 @@ namespace Arche {
         }
 
         std::string_view DockspacePanel::GetName() const { return name; }
-
-        void DockspacePanel::RunParticlesDemo(std::shared_ptr<Arche::Scene::World> world) {
-            float y = 10.0f;
-            float xStart = 20.0f;
-            float xEnd = 380.0f;
-            float step = (xEnd - xStart) / 9.0f;
-            for (int i = 0; i < 10; ++i) {
-                float x = xStart + i * step;
-                Arche::Math::SpatialTransform transform;
-                transform.setPosition(Arche::Math::Vector3D(x, 0.0f, 0.0f));
-                world->createParticle(transform, 1.0f);
-            }
-        }
 
     } // namespace GUI
 } // namespace Arche

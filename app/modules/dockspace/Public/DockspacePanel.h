@@ -19,8 +19,6 @@ namespace Arche {
           private:
             std::string name;
             std::shared_ptr<UIContext> context;
-
-            void RunParticlesDemo(std::shared_ptr<Arche::Scene::World> world);
         };
     } // namespace GUI
 } // namespace Arche

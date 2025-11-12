@@ -11,9 +11,10 @@ add_subdirectory(backends/imgui)
 add_subdirectory(modules/dockspace)
 add_subdirectory(modules/log)
 add_subdirectory(modules/metrics)
-add_subdirectory(modules/viewport2D)
+
 add_subdirectory(modules/viewport3D)
-add_subdirectory(modules/simulationcontrol)
+
+add_subdirectory(modules/world-properties)
 
 add_library(arche-gui-bundle INTERFACE)
 
@@ -23,9 +24,8 @@ target_link_libraries(arche-gui-bundle INTERFACE
     arche::gui-panel-dockspace
     arche::gui-panel-log
     arche::gui-panel-metrics
-    arche::gui-panel-viewport2D
     arche::gui-panel-viewport3D
-    arche::gui-panel-simulationcontrol
+    arche::gui-panel-world-properties
     arche::imgui
 )
 

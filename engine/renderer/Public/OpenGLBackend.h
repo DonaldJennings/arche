@@ -1,13 +1,13 @@
 #pragma once
+#include "World.h"
 #include <ISubsystem.h>
+#include <JobPoolService.h>
 #include <LoggingService.h>
 #include <TimingService.h>
 #include <array>
 #include <memory>
 
 #include <Camera.h>
-#include <IEntity.h>
-
 struct GLFWwindow;
 
 namespace Arche {
@@ -26,7 +26,7 @@ namespace Arche {
             // sample it.
             bool initialise(GLFWwindow *mainWindow = nullptr);
 
-            void render(std::vector<std::shared_ptr<Arche::Scene::IEntity>> const &entities);
+            void render(std::vector<Arche::Scene::BodyView> const &entities);
             void shutdown() noexcept;
 
             unsigned int getRenderTexture() const { return renderTexture; }

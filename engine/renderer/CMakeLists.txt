@@ -8,7 +8,7 @@ add_library(${SYSTEM_TARGET_NAME} STATIC ${ARCHE_SYSTEM_SOURCES} ${ARCHE_SYSTEM_
 message("GLM DIR: ${GLM_DIR}")
 target_include_directories(${SYSTEM_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Public ${GLM_DIR})
 
-target_link_libraries(${SYSTEM_TARGET_NAME} PUBLIC arche::engine-math arche::engine-core arche::engine-scene PUBLIC arche::glad glfw OpenGL::GL)
+target_link_libraries(${SYSTEM_TARGET_NAME} PUBLIC arche::engine-core arche::engine-scene arche::engine-physics PUBLIC arche::glad glfw OpenGL::GL)
 
 set_target_properties(${SYSTEM_TARGET_NAME} PROPERTIES FOLDER "Engine/Renderer")
 

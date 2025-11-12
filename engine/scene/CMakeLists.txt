@@ -7,7 +7,7 @@ add_library(${SCENE_TARGET_NAME} STATIC ${SCENE_SOURCES} ${SCENE_HEADERS})
 
 target_include_directories(${SCENE_TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/Public)
 
-target_link_libraries(${SCENE_TARGET_NAME} PUBLIC arche::engine-math arche::engine-core)
+target_link_libraries(${SCENE_TARGET_NAME} PUBLIC arche::engine-core arche::engine-physics)
 
 set_target_properties(${SCENE_TARGET_NAME} PROPERTIES FOLDER "Engine/Scene")
 

@@ -8,11 +8,9 @@
 #include <imgui.h>
 
 #include <EngineCore.h>
-#include <JobPoolService.h>
 #include <LoggingService.h>
 #include <TimingService.h>
 #include <UIContext.h>
-#include <WorldConfig.h>
 #include <WorldSystem.h>
 
 #include <DockspacePanel.h>
@@ -21,7 +19,9 @@
 #include <LogPanel.h>
 #include <MetricsPanel.h>
 #include <PanelRegistry.h>
-#include <Viewport2DPanel.h>
+#include <WorldProperties.h>
+
+#include <SphereEntity.h>
 
 #include <GLFWInitialiser.h>
 #include <GLFWWindow_RAII.h>
@@ -32,15 +32,10 @@ int main() {
     try {
         // 1. Initialize GLFW and create window
         Arche::GUI::GLFWInitialiser glfwInitialiser;
-        auto window = std::make_shared<Arche::GUI::GLFWWindowHandle>(1280, 720, "Arche Engine");
-
-        Arche::Core::WorldConfig config;
-        config.stepDuration = 1.0f / 60.0f;
-        config.gravity = Arche::Math::Vector3D(0.0f, 98.1f, 0.0f);
-        auto world = Arche::Scene::World::Create(config);
+        auto window = std::make_shared<Arche::GUI::GLFWWindowHandle>(1920, 1080, "Arche Engine");
 
         // 2. Create EngineCore (manages all services)
-        auto engineCore = std::make_shared<Arche::Core::EngineCore>(world);
+        auto engineCore = std::make_shared<Arche::Core::EngineCore>();
 
         auto cam{std::make_shared<Arche::Scene::Camera>()};
 
@@ -66,11 +61,15 @@ int main() {
         panels.RegisterPanel(std::make_shared<Arche::GUI::LogPanel>(guiLoggerPtr));
         panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::Viewport3DPanel>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::WorldProperties>(context));
 
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
 
         engineCore->initialise(window->get());
+
+        engineCore->getWorld()->addEntity(
+            std::make_shared<Arche::Scene::SphereEntity>(10.0f, glm::vec3(0.0f, 10.0f, -15.0f)));
 
         engineCore->getTimingService()->pause();
         // 6. Main loop
@@ -84,6 +83,7 @@ int main() {
 
         engineCore->shutdown();
     } catch (const std::exception &ex) {
+
         std::cerr << "Exception: " << ex.what() << std::endl;
     } catch (...) {
         std::cerr << "Unknown exception occurred." << std::endl;

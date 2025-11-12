@@ -3,12 +3,11 @@
 #include <memory>
 
 #include <Camera.h>
-#include <Vector3D.h>
+#include <glm/glm.hpp>
 
 namespace Arche {
 namespace GUI {
 
-using Vec3 = Arche::Math::Vector3D;
 
 /**
  * Minimal CameraController: only the essentials required to control
@@ -43,7 +42,10 @@ public:
     void moveLocal(float forwardAmount, float rightAmount, float upAmount) noexcept;
 
     // Immediately apply controller state to attached Camera.
+    // - updateCamera: orbit-style update (position changes based on yaw/pitch/distance/target)
+    // - updateOrientationOnly: only updates yaw/pitch on the Camera, keeping its position unchanged
     void updateCamera() noexcept;
+    void updateOrientationOnly() noexcept;
 
     // Small configuration
     void setDistance(float d) noexcept;
@@ -54,6 +56,13 @@ public:
 
     float getYawDegrees() const noexcept;
     float getPitchDegrees() const noexcept;
+
+    void reset() noexcept {
+        distance = 5.0f;
+        yaw = 0.0f;
+        pitch = 0.0f;
+        target = glm::vec3{0.0, 0.0, 0.0};
+    }
 
 private:
     static float clamp(float v, float lo, float hi) noexcept;
@@ -66,7 +75,7 @@ private:
     float pitch{0.0f};      // radians
 
     // target in world space (panning)
-    Vec3 target{0.0, 0.0, 0.0};
+    glm::vec3 target{0.0, 0.0, 0.0};
 
     // Sensitivity / limits
     float rotateSpeed{0.005f};

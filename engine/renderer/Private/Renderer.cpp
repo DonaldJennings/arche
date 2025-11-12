@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstring>
 #include <iomanip>
+#include <IEntity.h>
 #include <iostream>
 #include <sstream>
 
@@ -141,7 +142,7 @@ bool Arche::Render::Renderer::initialise(GLFWwindow* mainWindow) {
     return true;
 }
 
-void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &entities) {
+void Arche::Render::Renderer::render(std::vector<std::shared_ptr<Arche::Scene::IEntity>> const &entities) {
     if (!initialised) {
         ARCHE_LOG_ERROR(mLogger, "Renderer not initialised before attempting to render!");
         return;
@@ -166,7 +167,7 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
     // Render to our framebuffer
     glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
     glViewport(0, 0, width, height);
-    glClearColor(0.1f, 0.12f, 0.15f, 1.0f);
+    glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // --- Minimal point-sprite rendering POC ---
@@ -209,39 +210,6 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
     glm::dmat4 projMat = mainViewportCamera->GetProjectionMatrix();
 
     static glm::dmat4 lastLoggedView{};
-    static bool hasLoggedView = false;
-    bool shouldLogView = !hasLoggedView;
-    if (!shouldLogView) {
-        const double* vptr = glm::value_ptr(viewMat);
-        const double* lastptr = glm::value_ptr(lastLoggedView);
-        for (int i = 0; i < 16; ++i) {
-            if (std::abs(vptr[i] - lastptr[i]) > 1e-6) {
-                shouldLogView = true;
-                break;
-            }
-        }
-    }
-
-    if (shouldLogView) {
-        const double* vptr = glm::value_ptr(viewMat);
-        std::ostringstream oss;
-        oss << std::fixed << std::setprecision(4);
-        oss << "View matrix (column-major rows):";
-        for (int row = 0; row < 4; ++row) {
-            oss << "\n[";
-            for (int col = 0; col < 4; ++col) {
-                const int idx = col * 4 + row;
-                oss << vptr[idx];
-                if (col < 3) {
-                    oss << ", ";
-                }
-            }
-            oss << "]";
-        }
-        ARCHE_LOG_INFO(mLogger, oss.str());
-        lastLoggedView = viewMat;
-        hasLoggedView = true;
-    }
 
     float viewF[16];
     float projF[16];
@@ -268,9 +236,9 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
     // Loop over entities and draw each particle at its position (world-space).
     for (const auto &ent : entities) {
         // Extract particle position (world coordinates).
-        float px = static_cast<float>(ent.transform.getPosition().x());
-        float py = static_cast<float>(ent.transform.getPosition().y());
-        float pz = static_cast<float>(ent.transform.getPosition().z());
+        float px = static_cast<float>(ent->getPosition().x);
+        float py = static_cast<float>(ent->getPosition().y);
+        float pz = static_cast<float>(ent->getPosition().z);
         float pos[3] = { px, py, pz };
 
         // upload single position
@@ -278,7 +246,7 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
         glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_DYNAMIC_DRAW);
 
         // per-particle point size based on ent.scale
-        float radiusWorld = static_cast<float>(ent.transform.getScale().x());
+        float radiusWorld = static_cast<float>(ent->getScale().x);
         // A simple world-space to pixel-sized heuristic: use radiusWorld * k, or just use radiusWorld
         float pointSize = std::max(1.0f, radiusWorld * 2.0f);
         if (locPointSize >= 0) glUniform1f(locPointSize, pointSize);
@@ -363,7 +331,7 @@ bool Arche::Render::Renderer::initialiseFrameBuffer() {
 
     // Important: clear the newly-created framebuffer to initialize texture contents.
     // This prevents sampling uninitialized memory (green/pink artifacts) when UI samples the texture.
-    glClearColor(0.10f, 0.12f, 0.15f, 1.0f);
+    glClearColor(clearColor.r, clearColor.g, clearColor.b, clearColor.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);

@@ -1,5 +1,7 @@
 #pragma once
+#include "World.h"
 #include <ISubsystem.h>
+#include <JobPoolService.h>
 #include <LoggingService.h>
 #include <TimingService.h>
 #include <array>

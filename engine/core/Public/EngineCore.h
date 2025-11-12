@@ -6,9 +6,9 @@
 
 #include "WorldSystem.h"
 #include <ISubsystem.h>
-#include <JobPoolService.h>
 #include <LoggingService.h>
 #include <Renderer.h>
+#include <PhysicsSystem.h>
 #include <TimingService.h>
 
 namespace Arche {
@@ -21,15 +21,13 @@ namespace Arche {
             /**
              * @brief Constructs the main engine core which manages subsystems and services.
              */
-            EngineCore(std::shared_ptr<Scene::World> worldIn)
+            EngineCore()
                 : loggerService(std::make_shared<LoggingService>()),
+                  physicsSystem(std::make_shared<Physics::PhysicsSystem>(loggerService)),
                   timingService(std::make_shared<TimingService>(loggerService)),
-                  jobPoolService(std::make_shared<JobPoolService>()),
-                  worldSystem(std::make_shared<Scene::WorldSystem>(worldIn, loggerService,
-                                                                   jobPoolService, timingService)),
+                  worldSystem(std::make_shared<Scene::WorldSystem>(loggerService, timingService)),
                   renderingSystem(std::make_shared<Render::Renderer>(loggerService)) 
             {
-                // Register the WorldSystem as a subsystem
                 registerSubsystem(worldSystem);
             }
 
@@ -57,14 +55,13 @@ namespace Arche {
             // Getters for services accessible to subsystems
             std::shared_ptr<TimingService> getTimingService() const { return timingService; }
             std::shared_ptr<LoggingService> getLoggingService() const { return loggerService; }
-            std::shared_ptr<JobPoolService> getJobPoolService() const { return jobPoolService; }
             std::shared_ptr<Render::Renderer> getRenderer() const { return renderingSystem; }
             std::shared_ptr<Scene::WorldSystem> getWorld() const { return worldSystem; }
 
           private:
             std::shared_ptr<LoggingService> loggerService;
+            std::shared_ptr<Physics::PhysicsSystem> physicsSystem;
             std::shared_ptr<TimingService> timingService;
-            std::shared_ptr<JobPoolService> jobPoolService;
             std::shared_ptr<Arche::Scene::WorldSystem> worldSystem;
             std::shared_ptr<Render::Renderer> renderingSystem;
             std::vector<std::shared_ptr<ISubsystem>> subsystems;

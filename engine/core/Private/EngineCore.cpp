@@ -10,10 +10,7 @@ namespace Arche {
         }
 
         void EngineCore::initialise(GLFWwindow *externalWindow) {
-            for (const std::shared_ptr<ISubsystem> &subsystem : subsystems) {
-                subsystem->initialise();
-            }
-
+            worldSystem->setPhysics(physicsSystem);
             renderingSystem->initialise(externalWindow);
         }
 
@@ -28,7 +25,7 @@ namespace Arche {
             }
 
             // Render the scene
-            renderingSystem->render(worldSystem->getWorld()->view().bodies);
+            renderingSystem->render(worldSystem->view().bodies);
         }
 
         void EngineCore::shutdown() {

@@ -1,10 +1,6 @@
 #pragma once
-#include "World.h"
 #include "Camera.h"
 #include <ISubsystem.h>
-#include <JobPoolService.h>
-#include <LoggingService.h>
-#include <TimingService.h>
 #include <cmath>
 #include <memory>
 
