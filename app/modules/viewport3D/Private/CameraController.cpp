@@ -50,44 +50,40 @@ namespace Arche {
         }
 
         void CameraController::pan(float dx, float dy) noexcept {
-            // Work in glm space and sync back to target
+            // Right-handed: yaw=0 faces -Z, up=+Y, right=+X.
             glm::dvec3 t{ target.x, target.y, target.z };
 
-            // Right vector approximated by yaw-only
-            double rightX = std::cos(static_cast<double>(yaw));
-            double rightZ = -std::sin(static_cast<double>(yaw));
+            const double sy = std::sin(static_cast<double>(yaw));
+            const double cy = std::cos(static_cast<double>(yaw));
 
-            // Apply pan in world units scaled by panSpeed and distance
-            double scale = static_cast<double>(panSpeed * distance);
-            t.x += (rightX * static_cast<double>(dx) - rightZ * static_cast<double>(dy)) * scale;
-            t.y += (static_cast<double>(dy) * scale) * 0.5; // small vertical component
-            t.z += (rightZ * static_cast<double>(dx) + rightX * static_cast<double>(dy)) * scale;
+            // Yaw-only right vector and world up
+            const glm::dvec3 right{ cy, 0.0, sy };
+            const glm::dvec3 up{ 0.0, 1.0, 0.0 };
 
-            // Sync back to controller target
+            const double scale = static_cast<double>(panSpeed * distance);
+            t += right * (static_cast<double>(dx) * scale);
+            t += up    * (static_cast<double>(dy) * scale);
+
             target.x = t.x;
             target.y = t.y;
             target.z = t.z;
         }
 
         void CameraController::moveLocal(float forwardAmount, float rightAmount, float upAmount) noexcept {
-            // Convert controller target to glm, compute camera position in world space
+            // Right-handed basis from yaw only (no pitch in strafing):
+            // yaw=0 => forward = (0,0,-1), right = (1,0,0)
             glm::dvec3 t{ target.x, target.y, target.z };
 
-            double camX = static_cast<double>(distance) * std::cos(static_cast<double>(pitch)) * std::sin(static_cast<double>(yaw));
-            double camY = static_cast<double>(distance) * std::sin(static_cast<double>(pitch));
-            double camZ = static_cast<double>(distance) * std::cos(static_cast<double>(pitch)) * std::cos(static_cast<double>(yaw));
-            glm::dvec3 camPos = t + glm::dvec3(camX, camY, camZ);
+            const double sy = std::sin(static_cast<double>(yaw));
+            const double cy = std::cos(static_cast<double>(yaw));
 
-            // Basis vectors
-            glm::dvec3 forwardDir = glm::normalize(t - camPos);
-            glm::dvec3 worldUp{0.0, 1.0, 0.0};
-            glm::dvec3 rightDir = glm::normalize(glm::cross(forwardDir, worldUp));
-            glm::dvec3 upDir = glm::normalize(glm::cross(rightDir, forwardDir));
+            const glm::dvec3 forwardDir{ -sy, 0.0, -cy };
+            const glm::dvec3 rightDir{    cy, 0.0,  sy };
+            const glm::dvec3 upDir{ 0.0, 1.0, 0.0 };
 
-            // Apply movement in local space
-            double fMove = static_cast<double>(forwardAmount);
-            double rMove = static_cast<double>(rightAmount);
-            double uMove = static_cast<double>(upAmount);
+            const double fMove = static_cast<double>(forwardAmount);
+            const double rMove = static_cast<double>(rightAmount);
+            const double uMove = static_cast<double>(upAmount);
 
             t += forwardDir * fMove + rightDir * rMove + upDir * uMove;
 
@@ -101,18 +97,22 @@ namespace Arche {
             if (!camera)
                 return;
 
-            // Convert spherical coordinates (distance, yaw, pitch) to Cartesian coordinates around target
-            double cx = static_cast<double>(distance) * std::cos(static_cast<double>(pitch)) * std::sin(static_cast<double>(yaw));
-            double cy = static_cast<double>(distance) * std::sin(static_cast<double>(pitch));
-            double cz = static_cast<double>(distance) * std::cos(static_cast<double>(pitch)) * std::cos(static_cast<double>(yaw));
+            // Build forward vector from yaw/pitch (right-handed, yaw=0 -> -Z)
+            const double sy = std::sin(static_cast<double>(yaw));
+            const double cy = std::cos(static_cast<double>(yaw));
+            const double sp = std::sin(static_cast<double>(pitch));
+            const double cp = std::cos(static_cast<double>(pitch));
 
-            glm::dvec3 camPos{
-                static_cast<double>(target.x) + cx,
-                static_cast<double>(target.y) + cy,
-                static_cast<double>(target.z) + cz
+            const glm::dvec3 forward{
+                cp * sy,
+                sp,
+                -cp * cy
             };
 
-            camera->SetPosition(camPos);
+            const glm::dvec3 tgt{ static_cast<double>(target.x), static_cast<double>(target.y), static_cast<double>(target.z) };
+            const glm::dvec3 eye = tgt - forward * static_cast<double>(distance);
+
+            camera->SetPosition(eye);
             camera->SetPitch(static_cast<double>(pitch * RAD_TO_DEG));
             camera->SetYaw(static_cast<double>(yaw * RAD_TO_DEG));
         }

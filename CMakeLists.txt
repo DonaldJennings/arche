@@ -46,6 +46,8 @@ target_include_directories(arche-imgui PUBLIC
 target_link_libraries(arche-imgui PUBLIC glfw OpenGL::GL)
 add_library(arche::imgui ALIAS arche-imgui)
 
+set_target_properties(arche-imgui PROPERTIES FOLDER "Tools")
+
 add_subdirectory(app)
 
 
