@@ -2,6 +2,7 @@
 #include "ICollider.h"
 #include "Rigidbody.h"
 #include <ISubsystem.h>
+#include <LoggingService.h>
 #include <memory>
 
 namespace Arche {
@@ -27,12 +28,13 @@ namespace Arche {
                 }
             }
 
-            void reset() { m_bodies.clear(); }
+            inline void reset() { m_bodies.clear(); }
 
-            glm::vec3 getGravity() const { return m_gravity; }
+            inline glm::vec3 getGravity() const { return m_gravity; }
 
-            void addBody(const PhysicsBody &body) { m_bodies.push_back(body); }
+            inline void addBody(const PhysicsBody &body) { m_bodies.push_back(body); }
 
+            inline std::vector<PhysicsBody> getBodies() const { return m_bodies; }
           private:
             std::vector<PhysicsBody> m_bodies;
             glm::vec3 m_gravity{0.0f, -9.81f, 0.0f};

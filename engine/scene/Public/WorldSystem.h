@@ -125,6 +125,8 @@ namespace Arche {
                 return std::nullopt;
             }
 
+            std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysicsSystem() const { return m_physicsSystem; }
+
           private:
             std::uint64_t m_nextEntityID{1};
             std::unordered_map<std::uint64_t, std::shared_ptr<IEntity>> m_entityMap;

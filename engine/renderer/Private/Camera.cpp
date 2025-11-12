@@ -65,61 +65,57 @@ glm::dmat4 Camera::GetProjectionMatrix() {
 }
 
 void Camera::RecalculateViewMatrix() {
-    // Compute forward vector from pitch/yaw (degrees) - keep same convention as before:
-    // yaw = 0 looks down -Z, positive yaw rotates to the right.
+    // Compute forward vector from pitch/yaw (degrees) - yaw=0 looks down -Z
     const double pitchRad = DegToRad(pitch_);
     const double yawRad = DegToRad(yaw_);
 
     const double fx = std::cos(pitchRad) * std::sin(yawRad);
     const double fy = std::sin(pitchRad);
     const double fz = -std::cos(pitchRad) * std::cos(yawRad);
-    glm::dvec3 forward = glm::dvec3(fx, fy, fz);
-    forward = glm::normalize(forward);
+    glm::dvec3 forward = glm::normalize(glm::dvec3(fx, fy, fz));
 
-    // World up (Y)
     glm::dvec3 worldUp = glm::dvec3(0.0, 1.0, 0.0);
-
-    // Right and up
     glm::dvec3 right = glm::normalize(glm::cross(forward, worldUp));
     glm::dvec3 up = glm::normalize(glm::cross(right, forward));
 
-    // Build view matrix using GLM (right-handed lookAt)
     glm::dvec3 eye = position_;
-    glm::dmat4 view = glm::lookAt(eye, eye + forward, up);
-
-    viewMatrix_ = view;
+    viewMatrix_ = glm::lookAt(eye, eye + forward, up);
 }
 
 void Camera::RecalculateProjectionMatrix() {
-    // GLM perspective uses radians
-    glm::dmat4 proj = glm::perspective(glm::radians(fovY_), aspectRatio_, nearPlane_, farPlane_);
-    projectionMatrix_ = proj;
+    projectionMatrix_ = glm::perspective(glm::radians(fovY_), aspectRatio_, nearPlane_, farPlane_);
 }
 
 glm::dvec3 Camera::screenToWorldRay(float screenX, float screenY, float viewportWidth, float viewportHeight) {
-    // Convert to normalized device coordinates (NDC)
-    double ndcX = (2.0 * static_cast<double>(screenX)) / static_cast<double>(viewportWidth) - 1.0;
-    double ndcY = 1.0 - (2.0 * static_cast<double>(screenY)) / static_cast<double>(viewportHeight);
+    // Convert to NDC [-1,1]
+    const double ndcX = (2.0 * static_cast<double>(screenX)) / static_cast<double>(viewportWidth) - 1.0;
+    const double ndcY = 1.0 - (2.0 * static_cast<double>(screenY)) / static_cast<double>(viewportHeight);
 
-    // Clip space points
-    glm::dvec4 clipNear(ndcX, ndcY, -1.0, 1.0);
-    glm::dvec4 clipFar (ndcX, ndcY,  1.0, 1.0);
+    // Camera basis from yaw/pitch
+    const double pitchRad = DegToRad(pitch_);
+    const double yawRad   = DegToRad(yaw_);
+    const glm::dvec3 forward = glm::normalize(glm::dvec3(
+        std::cos(pitchRad) * std::sin(yawRad),
+        std::sin(pitchRad),
+        -std::cos(pitchRad) * std::cos(yawRad)));
+    const glm::dvec3 worldUp(0.0, 1.0, 0.0);
+    const glm::dvec3 right = glm::normalize(glm::cross(forward, worldUp));
+    const glm::dvec3 up = glm::normalize(glm::cross(right, forward));
 
-    // Use stored GLM matrices directly
-    glm::dmat4 viewMat = viewMatrix_;
-    glm::dmat4 projMat = projectionMatrix_;
+    // Convert NDC to camera-space ray with FOV
+    const double tanHalfFovY = std::tan(glm::radians(fovY_) * 0.5);
+    const double tanHalfFovX = tanHalfFovY * static_cast<double>(aspectRatio_);
 
-    glm::dmat4 invVP = glm::inverse(projMat * viewMat);
+    glm::dvec3 dirCamera(
+        ndcX * tanHalfFovX,
+        ndcY * tanHalfFovY,
+        -1.0
+    );
+    dirCamera = glm::normalize(dirCamera);
 
-    glm::dvec4 worldNearH = invVP * clipNear;
-    glm::dvec4 worldFarH  = invVP * clipFar;
-
-    // Perspective divide
-    glm::dvec3 worldNear = glm::dvec3(worldNearH) / worldNearH.w;
-    glm::dvec3 worldFar  = glm::dvec3(worldFarH)  / worldFarH.w;
-
-    glm::dvec3 dir = glm::normalize(worldFar - worldNear);
-    return dir;
+    // Transform from camera space to world space using basis
+    glm::dvec3 worldDir = glm::normalize(dirCamera.x * right + dirCamera.y * up + dirCamera.z * forward);
+    return worldDir;
 }
 
 } // namespace Scene
