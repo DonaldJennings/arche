@@ -6,6 +6,7 @@
 #include <TimingService.h>
 #include <array>
 #include <memory>
+#include <glm/glm.hpp>
 
 namespace Arche {
     namespace Scene {
@@ -13,8 +14,10 @@ namespace Arche {
         class Camera {
           public:
             Camera() = default;
-            void SetPosition(const Math::Vector3D &position);
-            Math::Vector3D GetPosition();
+
+            // Position using GLM double-precision vector
+            void SetPosition(const glm::dvec3 &position);
+            glm::dvec3 GetPosition() const;
 
             void SetPitch(double pitch);
             double GetPitch() const;
@@ -26,14 +29,20 @@ namespace Arche {
 
             void setPerspective(double fovY, double aspectRatio, double nearPlane, double farPlane);
 
-            std::array<double, 16> GetViewMatrix();
-            std::array<double, 16> GetProjectionMatrix();
+            // Returns a world-space ray direction (normalized) for the given screen coords.
+            // Coordinates: screenX/screenY in pixels, viewportWidth/viewportHeight in pixels.
+            glm::dvec3 screenToWorldRay(float screenX, float screenY, float viewportWidth, float viewportHeight);
+
+            // Keep legacy layout: column-major 4x4 matrix as 16 double values
+            glm::dmat4 GetViewMatrix();
+            glm::dmat4 GetProjectionMatrix();
 
           private:
             void RecalculateViewMatrix();
             void RecalculateProjectionMatrix();
 
-            Arche::Math::Vector3D position_{0.0, 0.0, 0.0};
+            // Use GLM double-precision vector for position
+            glm::dvec3 position_{0.0, 0.0, 0.0};
             double pitch_{0.0}; // in degrees
             double yaw_{0.0};   // in degrees
 
@@ -42,8 +51,9 @@ namespace Arche {
             double nearPlane_{0.1};
             double farPlane_{1000.0};
 
-            std::array<double, 16> viewMatrix_{};
-            std::array<double, 16> projectionMatrix_{};
+            // Keep existing public API returning std::array<double,16>
+            glm::dmat4 viewMatrix_{};
+            glm::dmat4 projectionMatrix_{};
         };
 
     } // namespace Scene

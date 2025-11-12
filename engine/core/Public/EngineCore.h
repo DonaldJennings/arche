@@ -22,10 +22,11 @@ namespace Arche {
              * @brief Constructs the main engine core which manages subsystems and services.
              */
             EngineCore(std::shared_ptr<Scene::World> worldIn)
-                : worldSystem(std::make_shared<Scene::WorldSystem>(worldIn, loggerService,
-                                                                   jobPoolService, timingService)),
-                  timingService(std::make_shared<TimingService>(loggerService)), loggerService(std::make_shared<LoggingService>()),
+                : loggerService(std::make_shared<LoggingService>()),
+                  timingService(std::make_shared<TimingService>(loggerService)),
                   jobPoolService(std::make_shared<JobPoolService>()),
+                  worldSystem(std::make_shared<Scene::WorldSystem>(worldIn, loggerService,
+                                                                   jobPoolService, timingService)),
                   renderingSystem(std::make_shared<Render::Renderer>(loggerService)) 
             {
                 // Register the WorldSystem as a subsystem

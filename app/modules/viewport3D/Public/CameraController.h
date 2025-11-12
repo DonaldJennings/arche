@@ -39,6 +39,9 @@ public:
     // panning: translate camera target in world-space X/Y plane
     void pan(float dx, float dy) noexcept;
 
+    // Move camera in local space (forward/right/up) by given amounts.
+    void moveLocal(float forwardAmount, float rightAmount, float upAmount) noexcept;
+
     // Immediately apply controller state to attached Camera.
     void updateCamera() noexcept;
 

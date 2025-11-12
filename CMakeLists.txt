@@ -21,6 +21,8 @@ option(BUILD_TESTING "Build the testing tree." ON)
 
 add_subdirectory(tools/glad)
 add_subdirectory(tools/GLFW)
+set(GLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/glm)
+
 
 find_package(OpenGL REQUIRED)
 
@@ -29,7 +31,6 @@ add_subdirectory(engine)
 
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/imgui)
-
 file(GLOB IMGUI_SOURCES
     ${IMGUI_DIR}/*.cpp
     ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp

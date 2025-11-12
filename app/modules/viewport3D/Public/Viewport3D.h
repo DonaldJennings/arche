@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <CameraController.h>
 #include <UIContext.h>
 
 namespace Arche {
@@ -18,6 +19,8 @@ namespace Arche {
           private:
             std::string name;
             std::shared_ptr<Arche::GUI::UIContext> context;
+            std::shared_ptr<CameraController> cameraController;
+            std::shared_ptr<Arche::Scene::Camera> attachedCamera;
 
             void Reset();
         };

@@ -12,6 +12,9 @@
 #include <iostream>
 #include <sstream>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 // minimal point sprite shader sources - updated to use view/projection matrices
 static const char *ptsVs = R"glsl(
 #version 460 core
@@ -201,16 +204,18 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
 
     glUseProgram(s_ptsProgram);
 
-    // Convert camera matrices (double) to float arrays for GL
-    auto viewD = mainViewportCamera->GetViewMatrix();
-    auto projD = mainViewportCamera->GetProjectionMatrix();
+    // Convert camera matrices (glm::dmat4) to float arrays for GL
+    glm::dmat4 viewMat = mainViewportCamera->GetViewMatrix();
+    glm::dmat4 projMat = mainViewportCamera->GetProjectionMatrix();
 
-    static std::array<double, 16> lastLoggedView{};
+    static glm::dmat4 lastLoggedView{};
     static bool hasLoggedView = false;
     bool shouldLogView = !hasLoggedView;
     if (!shouldLogView) {
-        for (size_t i = 0; i < viewD.size(); ++i) {
-            if (std::abs(viewD[i] - lastLoggedView[i]) > 1e-6) {
+        const double* vptr = glm::value_ptr(viewMat);
+        const double* lastptr = glm::value_ptr(lastLoggedView);
+        for (int i = 0; i < 16; ++i) {
+            if (std::abs(vptr[i] - lastptr[i]) > 1e-6) {
                 shouldLogView = true;
                 break;
             }
@@ -218,6 +223,7 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
     }
 
     if (shouldLogView) {
+        const double* vptr = glm::value_ptr(viewMat);
         std::ostringstream oss;
         oss << std::fixed << std::setprecision(4);
         oss << "View matrix (column-major rows):";
@@ -225,7 +231,7 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
             oss << "\n[";
             for (int col = 0; col < 4; ++col) {
                 const int idx = col * 4 + row;
-                oss << viewD[idx];
+                oss << vptr[idx];
                 if (col < 3) {
                     oss << ", ";
                 }
@@ -233,15 +239,19 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
             oss << "]";
         }
         ARCHE_LOG_INFO(mLogger, oss.str());
-        lastLoggedView = viewD;
+        lastLoggedView = viewMat;
         hasLoggedView = true;
     }
 
     float viewF[16];
     float projF[16];
-    for (int i = 0; i < 16; ++i) {
-        viewF[i] = static_cast<float>(viewD[i]);
-        projF[i] = static_cast<float>(projD[i]);
+    {
+        const double* vptr = glm::value_ptr(viewMat);
+        const double* pptr = glm::value_ptr(projMat);
+        for (int i = 0; i < 16; ++i) {
+            viewF[i] = static_cast<float>(vptr[i]);
+            projF[i] = static_cast<float>(pptr[i]);
+        }
     }
 
     // upload matrix uniforms once per frame

@@ -8,24 +8,21 @@
 #include <cmath>
 #include <memory>
 
-namespace
-{
-    constexpr double M_PI = 3.14159265358979323846;
-}
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 namespace Arche {
 namespace Scene {
 
-// Helper
-static double DegToRad(double d) { return d * (M_PI / 180.0); }
+// Helper using GLM utilities
+static double DegToRad(double d) { return glm::radians(d); }
 
-void Camera::SetPosition(const Math::Vector3D &position) {
+void Camera::SetPosition(const glm::dvec3 &position) {
     position_ = position;
-    // Recalculate lazily on next GetViewMatrix call
     RecalculateViewMatrix();
 }
 
- Math::Vector3D Camera::GetPosition() {
+glm::dvec3 Camera::GetPosition() const {
     return position_;
 }
 
@@ -61,91 +58,72 @@ void Camera::setPerspective(double fovY, double aspectRatio, double nearPlane, d
     RecalculateProjectionMatrix();
 }
 
-std::array<double, 16> Camera::GetViewMatrix() {
-    // Ensure view matrix is up to date
+glm::dmat4 Camera::GetViewMatrix() {
     RecalculateViewMatrix();
     return viewMatrix_;
 }
 
-std::array<double, 16> Camera::GetProjectionMatrix() {
+glm::dmat4 Camera::GetProjectionMatrix() {
     RecalculateProjectionMatrix();
     return projectionMatrix_;
 }
 
 void Camera::RecalculateViewMatrix() {
-    // Compute forward vector from pitch/yaw (degrees)
+    // Compute forward vector from pitch/yaw (degrees) - keep same convention as before:
+    // yaw = 0 looks down -Z, positive yaw rotates to the right.
     const double pitchRad = DegToRad(pitch_);
     const double yawRad = DegToRad(yaw_);
 
-    // Use convention: yaw = 0 looks down -Z, positive yaw rotates to the right.
-    // forward:
-    double fx = std::cos(pitchRad) * std::sin(yawRad);
-    double fy = std::sin(pitchRad);
-    double fz = -std::cos(pitchRad) * std::cos(yawRad);
-    Math::Vector3D forward(fx, fy, fz);
-    forward = forward.normalized();
+    const double fx = std::cos(pitchRad) * std::sin(yawRad);
+    const double fy = std::sin(pitchRad);
+    const double fz = -std::cos(pitchRad) * std::cos(yawRad);
+    glm::dvec3 forward = glm::dvec3(fx, fy, fz);
+    forward = glm::normalize(forward);
 
-    // World up
-    Math::Vector3D worldUp = Math::Vector3D::UnitY();
+    // World up (Y)
+    glm::dvec3 worldUp = glm::dvec3(0.0, 1.0, 0.0);
 
-    // Right = normalize(cross(forward, worldUp)) following OpenGL's right-handed lookAt convention
-    Math::Vector3D right = forward.cross(worldUp).normalized();
+    // Right and up
+    glm::dvec3 right = glm::normalize(glm::cross(forward, worldUp));
+    glm::dvec3 up = glm::normalize(glm::cross(right, forward));
 
-    // Recomputed up = cross(right, forward)
-    Math::Vector3D up = right.cross(forward).normalized();
+    // Build view matrix using GLM (right-handed lookAt)
+    glm::dvec3 eye = position_;
+    glm::dmat4 view = glm::lookAt(eye, eye + forward, up);
 
-    // Build lookAt style view matrix (column-major)
-    // f = forward
-    // s = right
-    // u = up
-    const Math::Vector3D &f = forward;
-    const Math::Vector3D &s = right;
-    const Math::Vector3D &u = up;
-
-    const Math::Vector3D eye = position_;
-    const double tx = -s.dot(eye);
-    const double ty = -u.dot(eye);
-    const double tz = f.dot(eye);
-
-    // Column-major layout: m[col*4 + row]
-    std::array<double, 16> m{};
-    m[0]  = s.x();  m[1]  = s.y();  m[2]  = s.z();  m[3]  = 0.0;
-    m[4]  = u.x();  m[5]  = u.y();  m[6]  = u.z();  m[7]  = 0.0;
-    m[8]  = -f.x(); m[9]  = -f.y(); m[10] = -f.z(); m[11] = 0.0;
-    m[12] = tx;     m[13] = ty;     m[14] = tz;     m[15] = 1.0;
-
-    const_cast<Camera*>(this)->viewMatrix_ = m;
+    viewMatrix_ = view;
 }
 
 void Camera::RecalculateProjectionMatrix() {
-    // Perspective projection (column-major)
-    const double fovRad = DegToRad(fovY_);
-    const double f = 1.0 / std::tan(fovRad * 0.5);
-    const double nf = 1.0 / (nearPlane_ - farPlane_);
+    // GLM perspective uses radians
+    glm::dmat4 proj = glm::perspective(glm::radians(fovY_), aspectRatio_, nearPlane_, farPlane_);
+    projectionMatrix_ = proj;
+}
 
-    std::array<double, 16> p{};
-    p[0]  = f / aspectRatio_;
-    p[1]  = 0.0;
-    p[2]  = 0.0;
-    p[3]  = 0.0;
+glm::dvec3 Camera::screenToWorldRay(float screenX, float screenY, float viewportWidth, float viewportHeight) {
+    // Convert to normalized device coordinates (NDC)
+    double ndcX = (2.0 * static_cast<double>(screenX)) / static_cast<double>(viewportWidth) - 1.0;
+    double ndcY = 1.0 - (2.0 * static_cast<double>(screenY)) / static_cast<double>(viewportHeight);
 
-    p[4]  = 0.0;
-    p[5]  = f;
-    p[6]  = 0.0;
-    p[7]  = 0.0;
+    // Clip space points
+    glm::dvec4 clipNear(ndcX, ndcY, -1.0, 1.0);
+    glm::dvec4 clipFar (ndcX, ndcY,  1.0, 1.0);
 
-    p[8]  = 0.0;
-    p[9]  = 0.0;
-    p[10] = (farPlane_ + nearPlane_) * nf;
-    p[11] = (2.0 * farPlane_ * nearPlane_) * nf;
+    // Use stored GLM matrices directly
+    glm::dmat4 viewMat = viewMatrix_;
+    glm::dmat4 projMat = projectionMatrix_;
 
-    p[12] = 0.0;
-    p[13] = 0.0;
-    p[14] = -1.0;
-    p[15] = 0.0;
+    glm::dmat4 invVP = glm::inverse(projMat * viewMat);
 
-    // Note: layout chosen for a right-handed projection compatible with common GL-style usage.
-    const_cast<Camera*>(this)->projectionMatrix_ = p;
+    glm::dvec4 worldNearH = invVP * clipNear;
+    glm::dvec4 worldFarH  = invVP * clipFar;
+
+    // Perspective divide
+    glm::dvec3 worldNear = glm::dvec3(worldNearH) / worldNearH.w;
+    glm::dvec3 worldFar  = glm::dvec3(worldFarH)  / worldFarH.w;
+
+    glm::dvec3 dir = glm::normalize(worldFar - worldNear);
+    return dir;
 }
 
 } // namespace Scene

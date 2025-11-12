@@ -44,7 +44,7 @@ int main() {
 
         auto cam{std::make_shared<Arche::Scene::Camera>()};
 
-        cam->SetPosition(Arche::Math::Vector3D(0.0f, 0.0f, 25.0f));
+        cam->SetPosition(glm::dvec3(0.0f, 0.0f, 25.0f));
         cam->setPitchYaw(0.0f, 180.0f);
         cam->setPerspective(60.0f,
                             static_cast<double>(engineCore->getRenderer()->getWidth()) /
@@ -52,43 +52,6 @@ int main() {
                             0.1f, 1000.0f);
 
         engineCore->getRenderer()->attachCamera(cam);
-
-        // --- DEBUG: create test particles to validate camera / coordinates ---
-        {
-            // particle at world origin (should be visible if camera looks at origin)
-            Arche::Math::SpatialTransform t0;
-            t0.setPosition(Arche::Math::Vector3D(0.0, 0.0, 0.0));
-            t0.setScale(Arche::Math::Vector3D(10.0, 10.0, 10.0)); // make large so it's easy to spot
-            auto id0 = world->createParticle(t0, 1.0f);
-            {
-                std::ostringstream oss;
-                oss << "DEBUG: created particle id=" << id0 << " at (0,0,0) scale=10";
-                ARCHE_LOG_INFO(engineCore->getLoggingService(), oss.str());
-            }
-
-            // particle directly in front of camera (5 units ahead)
-            auto camPos = cam->GetPosition();
-            double pitchDeg = cam->GetPitch();
-            double yawDeg = cam->GetYaw();
-            auto DegToRad = [](double d) { return d * (3.14159265358979323846 / 180.0); };
-            double pr = DegToRad(pitchDeg);
-            double yr = DegToRad(yawDeg);
-            double fx = std::cos(pr) * std::sin(yr);
-            double fy = std::sin(pr);
-            double fz = -std::cos(pr) * std::cos(yr);
-            Arche::Math::Vector3D forward(static_cast<double>(fx), static_cast<double>(fy), static_cast<double>(fz));
-            forward = forward.normalized();
-            Arche::Math::SpatialTransform t1;
-            auto frontPos = camPos + forward * 5.0; // 5 units in front
-            t1.setPosition(frontPos);
-            t1.setScale(Arche::Math::Vector3D(8.0, 8.0, 8.0));
-            auto id1 = world->createParticle(t1, 1.0f);
-            {
-                std::ostringstream oss;
-                oss << "DEBUG: created particle id=" << id1 << " at (" << frontPos.x() << "," << frontPos.y() << "," << frontPos.z() << ") scale=8";
-                ARCHE_LOG_INFO(engineCore->getLoggingService(), oss.str());
-            }
-        }
 
         // 4. Create UIContext and pass references to services and WorldSystem
         auto context = std::make_shared<Arche::GUI::UIContext>(engineCore);
