@@ -19,7 +19,7 @@ namespace Arche {
              * @brief Update the subsystem.
              * @param deltaTime Time elapsed since the last update.
              */
-            virtual void update(float deltaTime) = 0;
+            virtual void update(double deltaTime) = 0;
             /**
              * @brief Shutdown the subsystem.
              */

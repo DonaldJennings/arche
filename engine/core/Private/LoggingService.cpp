@@ -43,7 +43,7 @@ std::string LoggingService::formatLogMessage(LogLevel level, const std::string& 
         break;
     }
 
-    oss << " [" << levelStr << "] " << fileName << " - " << message;
+    oss << " [" << levelStr << "]" " - " << message;
     return oss.str();
 }
 

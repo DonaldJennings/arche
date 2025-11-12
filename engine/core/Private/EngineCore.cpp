@@ -1,7 +1,7 @@
 #include "EngineCore.h"
 
-#include <memory> // Ensure this is included for std::shared_ptr
 #include "EngineCore.h"
+#include <memory> // Ensure this is included for std::shared_ptr
 
 namespace Arche {
     namespace Core {
@@ -9,27 +9,31 @@ namespace Arche {
             subsystems.emplace_back(std::move(newSubsystem));
         }
 
-        void EngineCore::initialise() {
-            for (const std::shared_ptr<ISubsystem>& subsystem : subsystems) {
-                subsystem->initialise();
-            }
-            isRunning = true;
+        void EngineCore::initialise(GLFWwindow *externalWindow) {
+            worldSystem->setPhysics(physicsSystem);
+            renderingSystem->initialise(externalWindow);
         }
 
-        void EngineCore::mainLoop() {
-            const float deltaTime = 1.0f / 60.0f; // Assuming a fixed time step for simplicity
-            while (isRunning) {
-                for (const std::shared_ptr<ISubsystem>& subsystem : subsystems) {
-                    subsystem->update(deltaTime);
-                }
+        void EngineCore::update() {
+
+            // Update timing
+            timingService->tick();
+
+            // Update all subsystems
+            for (const std::shared_ptr<ISubsystem> &subsystem : subsystems) {
+                subsystem->update(timingService->deltaTime());
             }
+
+            // Render the scene
+            renderingSystem->render(worldSystem->view().bodies);
         }
 
         void EngineCore::shutdown() {
-            for (const std::shared_ptr<ISubsystem>& subsystem : subsystems) {
+            for (const std::shared_ptr<ISubsystem> &subsystem : subsystems) {
                 subsystem->shutdown();
             }
-            isRunning = false;
+
+            renderingSystem->shutdown();
         }
     } // namespace Core
 } // namespace Arche

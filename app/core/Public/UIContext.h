@@ -1,38 +1,42 @@
 #pragma once
 
-#include <WorldSystem.h>
+#include "Renderer.h"
 #include <LoggingService.h>
+#include <WorldSystem.h>
+#include <EngineCore.h>
 
 namespace Arche {
     namespace GUI {
 
-        struct UIContext
-        {
+        struct UIContext {
           private:
-            bool isPaused{true};
+            std::shared_ptr<Arche::Core::EngineCore> engineCore;
 
           public:
-            void pauseSimulation() { 
-                isPaused = true; 
-                if (logger) ARCHE_LOG_INFO(logger, "Simulation paused"); 
-            };
-            void runSimulation() { 
-                isPaused = false; 
-                if (logger) ARCHE_LOG_INFO(logger, "Simulation started"); 
-            };
-            bool simulationIsPaused() const { return isPaused; };
-            void toggleSimulationState() { 
-                isPaused = !isPaused; 
-                if (logger) ARCHE_LOG_INFO(logger, isPaused ? "Simulation paused" : "Simulation started"); 
-            };
+            UIContext(std::shared_ptr<Arche::Core::EngineCore> engineIn) : engineCore{engineIn} {};
 
-            std::shared_ptr<Arche::Scene::WorldSystem> worldSystem;
-            std::shared_ptr<Arche::Core::LoggingService> logger;
+            std::shared_ptr<Arche::Core::LoggingService> logger() const { return engineCore->getLoggingService(); }
 
-            UIContext(
-                std::shared_ptr<Arche::Core::LoggingService> loggerIn,
-                std::shared_ptr<Arche::Scene::WorldSystem> worldSystemIn)
-                : logger(std::move(loggerIn)), worldSystem(std::move(worldSystemIn)) {}
+            std::shared_ptr<Arche::Render::Renderer> renderer() const { return engineCore->getRenderer(); }
+
+            std::shared_ptr<Arche::Scene::WorldSystem> worldSystem() const { return engineCore->getWorld(); }
+
+            void pauseSimulation() {
+                engineCore->getTimingService()->pause();
+            };
+            void runSimulation() {
+                engineCore->getTimingService()->resume();
+            };
+            bool simulationIsPaused() const { return engineCore->getTimingService()->isPaused(); };
+
+            void toggleSimulationState() {
+                
+                if (simulationIsPaused()) {
+                    engineCore->getTimingService()->resume();
+                } else {
+                    engineCore->getTimingService()->pause();
+                }
+            };
         };
     } // namespace GUI
 } // namespace Arche

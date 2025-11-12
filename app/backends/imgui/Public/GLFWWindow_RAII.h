@@ -1,5 +1,6 @@
 #pragma once
 
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <stdexcept>
 
@@ -24,6 +25,12 @@ public:
         }
         glfwMakeContextCurrent(window_);
         glfwSwapInterval(1); // Enable vsync
+
+
+        if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+            glfwDestroyWindow(window_);
+            throw std::runtime_error("Failed to initialize GLAD");
+        }
     }
 
     ~GLFWWindowHandle() {

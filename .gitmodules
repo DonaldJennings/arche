@@ -7,3 +7,6 @@
 [submodule "tools/GLFW"]
 	path = tools/GLFW
 	url = https://github.com/glfw/glfw.git
+[submodule "tools/glm"]
+	path = tools/glm
+	url = https://github.com/g-truc/glm.git
