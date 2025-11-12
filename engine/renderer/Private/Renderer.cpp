@@ -5,8 +5,12 @@
 #include <glad/glad.h>
 
 #include "Renderer.h"
-#include <iostream>
+#include <array>
+#include <cmath>
 #include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
 
 // minimal point sprite shader sources - updated to use view/projection matrices
 static const char *ptsVs = R"glsl(
@@ -200,6 +204,39 @@ void Arche::Render::Renderer::render(std::vector<Arche::Scene::BodyView> const &
     // Convert camera matrices (double) to float arrays for GL
     auto viewD = mainViewportCamera->GetViewMatrix();
     auto projD = mainViewportCamera->GetProjectionMatrix();
+
+    static std::array<double, 16> lastLoggedView{};
+    static bool hasLoggedView = false;
+    bool shouldLogView = !hasLoggedView;
+    if (!shouldLogView) {
+        for (size_t i = 0; i < viewD.size(); ++i) {
+            if (std::abs(viewD[i] - lastLoggedView[i]) > 1e-6) {
+                shouldLogView = true;
+                break;
+            }
+        }
+    }
+
+    if (shouldLogView) {
+        std::ostringstream oss;
+        oss << std::fixed << std::setprecision(4);
+        oss << "View matrix (column-major rows):";
+        for (int row = 0; row < 4; ++row) {
+            oss << "\n[";
+            for (int col = 0; col < 4; ++col) {
+                const int idx = col * 4 + row;
+                oss << viewD[idx];
+                if (col < 3) {
+                    oss << ", ";
+                }
+            }
+            oss << "]";
+        }
+        ARCHE_LOG_INFO(mLogger, oss.str());
+        lastLoggedView = viewD;
+        hasLoggedView = true;
+    }
+
     float viewF[16];
     float projF[16];
     for (int i = 0; i < 16; ++i) {

@@ -88,7 +88,7 @@ void Camera::RecalculateViewMatrix() {
     // World up
     Math::Vector3D worldUp = Math::Vector3D::UnitY();
 
-    // Right = normalize(cross(forward, worldUp))
+    // Right = normalize(cross(forward, worldUp)) following OpenGL's right-handed lookAt convention
     Math::Vector3D right = forward.cross(worldUp).normalized();
 
     // Recomputed up = cross(right, forward)
@@ -102,17 +102,17 @@ void Camera::RecalculateViewMatrix() {
     const Math::Vector3D &s = right;
     const Math::Vector3D &u = up;
 
-    // translation components
-    double tx = - (s.x() * position_.x() + s.y() * position_.y() + s.z() * position_.z());
-    double ty = - (u.x() * position_.x() + u.y() * position_.y() + u.z() * position_.z());
-    double tz =   (f.x() * position_.x() + f.y() * position_.y() + f.z() * position_.z());
+    const Math::Vector3D eye = position_;
+    const double tx = -s.dot(eye);
+    const double ty = -u.dot(eye);
+    const double tz = f.dot(eye);
 
     // Column-major layout: m[col*4 + row]
     std::array<double, 16> m{};
-    m[0]  = s.x(); m[1]  = s.y(); m[2]  = s.z(); m[3]  = tx;
-    m[4]  = u.x(); m[5]  = u.y(); m[6]  = u.z(); m[7]  = ty;
-    m[8]  = -f.x();m[9]  = -f.y();m[10] = -f.z();m[11] = tz;
-    m[12] = 0.0;   m[13] = 0.0;   m[14] = 0.0;   m[15] = 1.0;
+    m[0]  = s.x();  m[1]  = s.y();  m[2]  = s.z();  m[3]  = 0.0;
+    m[4]  = u.x();  m[5]  = u.y();  m[6]  = u.z();  m[7]  = 0.0;
+    m[8]  = -f.x(); m[9]  = -f.y(); m[10] = -f.z(); m[11] = 0.0;
+    m[12] = tx;     m[13] = ty;     m[14] = tz;     m[15] = 1.0;
 
     const_cast<Camera*>(this)->viewMatrix_ = m;
 }
