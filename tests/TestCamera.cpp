@@ -5,7 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <cmath>
 
-using namespace Arche::Scene;
+using namespace Arche::Render;
 using namespace Catch;
 
 SCENARIO("Camera setters/getters and matrix generation", "[camera]") {

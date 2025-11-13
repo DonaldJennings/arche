@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include <Camera.h>
 #include <glm/glm.hpp>
+#include <Camera.h>
 
 namespace Arche {
 namespace GUI {
@@ -26,7 +26,7 @@ public:
     CameraController() = default;
 
     // Attach / detach the engine camera the controller drives.
-    void attachCamera(std::shared_ptr<Arche::Scene::Camera> cam) noexcept;
+    void attachCamera(std::shared_ptr<Arche::Render::Camera> cam) noexcept;
     void detachCamera() noexcept;
 
     // Direct control operations (minimal):
@@ -39,7 +39,7 @@ public:
     void pan(float dx, float dy) noexcept;
 
     // Move camera in local space (forward/right/up) by given amounts.
-    void moveLocal(float forwardAmount, float rightAmount, float upAmount) noexcept;
+    void moveLocal(float forwardAmount, float rightAmount, float upAmount);
 
     // Immediately apply controller state to attached Camera.
     // - updateCamera: orbit-style update (position changes based on yaw/pitch/distance/target)
@@ -73,6 +73,7 @@ private:
     float distance{5.0f};   // radius from target
     float yaw{0.0f};        // radians
     float pitch{0.0f};      // radians
+    glm::vec3 position{0.0, 0.0, 5.0}; // cached position (world space)
 
     // target in world space (panning)
     glm::vec3 target{0.0, 0.0, 0.0};
@@ -85,7 +86,7 @@ private:
     float maxDistance{1000.0f};
 
     // Attached engine camera (owned externally)
-    std::shared_ptr<Arche::Scene::Camera> camera;
+    std::shared_ptr<Arche::Render::Camera> camera;
 };
 
 } // namespace GUI

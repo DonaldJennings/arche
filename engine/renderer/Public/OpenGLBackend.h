@@ -1,72 +1,98 @@
 #pragma once
-#include "World.h"
-#include <ISubsystem.h>
-#include <JobPoolService.h>
-#include <LoggingService.h>
-#include <TimingService.h>
 #include <array>
 #include <memory>
+#include <string>
+#include <unordered_map>
 
-#include <Camera.h>
+#include <IRenderBackend.h>
+#include <glad/glad.h>
+#include <glfw/glfw3.h>
+
 struct GLFWwindow;
+
+namespace Arche {
+    namespace Core {
+        class LoggingService;
+    }
+} // namespace Arche
 
 namespace Arche {
     namespace Render {
 
-        class Renderer {
-          public:
-            Renderer(std::shared_ptr<Arche::Core::LoggingService> logger, int width = 800, int height = 600,
-                     const std::string &title = "Arche Renderer")
-                : mLogger{logger}, width{width}, height{height}, title{title} {}
-
-            ~Renderer() noexcept { shutdown(); }
-
-            // Initialise with an optional existing GLFWwindow (the application's main window).
-            // If 'mainWindow' is provided, the renderer will create its FBO/texture in that context so the UI can
-            // sample it.
-            bool initialise(GLFWwindow *mainWindow = nullptr);
-
-            void render(std::vector<Arche::Scene::BodyView> const &entities);
-            void shutdown() noexcept;
-
-            unsigned int getRenderTexture() const { return renderTexture; }
-
-            int getWidth() const { return width; }
-            int getHeight() const { return height; }
-
-            void setViewportSize(int newWidth, int newHeight) {
-                width = newWidth;
-                height = newHeight;
-            }
-
-            void attachCamera(std::shared_ptr<Arche::Scene::Camera> camera) { mainViewportCamera = camera; }
-            // Recreate framebuffer attachments for the current width/height.
-            bool recreateFrameBuffer();
-
-            std::shared_ptr<Arche::Scene::Camera> getAttachedCamera() const { return mainViewportCamera; }
-
-            void setClearColour(float r, float g, float b, float a) { clearColor = {r, g, b, a}; }
-
-          private:
-            int width, height;
-            std::string title;
-
-            // If window is non-null we created a hidden window; otherwise we used the external mainWindow context.
-            GLFWwindow *window = nullptr;
-            GLFWwindow *externalContextWindow = nullptr; // if initialise(mainWindow) passed
-            unsigned int frameBuffer = 0;
-            unsigned int renderTexture = 0;
-            unsigned int renderBuffer = 0;
-
-            bool initialised = false;
-
-            bool initialiseFrameBuffer();
-
-            std::shared_ptr<Arche::Core::LoggingService> mLogger;
-            std::shared_ptr<Scene::Camera> mainViewportCamera;
-
-            glm::vec4 clearColor{0.1f, 0.12f, 0.15f, 1.0f};
+        struct GLShaderProgram {
+            GLuint programID = 0;
+            std::unordered_map<std::string, GLint> uniformLocations;
         };
 
+        struct GLMesh {
+            GLuint vertexArrayObject = 0;
+            GLuint vertexBufferObject = 0;
+            GLuint elementBufferObject = 0;
+            GLsizei indexCount = 0;
+            GLsizei vertexCount = 0;
+        };
+
+        struct GLTexture {
+            GLuint textureID = 0;
+        };
+
+        class OpenGLBackend : public IRenderBackend {
+          public:
+            OpenGLBackend();
+
+            ~OpenGLBackend() noexcept override { shutdown(); }
+            void initialise() override;
+            void shutdown() noexcept override;
+            void resize(glm::ivec2 newSize) override;
+            void beginFrame() override;
+            void endFrame() override;
+            void setViewProjection(const glm::mat4 &view, const glm::mat4 &projection) override;
+            void setShader(std::shared_ptr<Shader> shader) override;
+            void setMaterial(const Material &material) override;
+            void setLogger(std::shared_ptr<Core::LoggingService> loggerIn) { mLogger = loggerIn; };
+            void drawMesh(const Mesh &mesh, const glm::mat4 &model) override;
+            unsigned int getRenderTextureID() const override { return m_colorTexture; }
+
+            void setUniformMat4(const std::string &name, const glm::mat4 &value) override;
+            void setUniformVec4(const std::string &name, const glm::vec4 &value) override;
+            void setUniform1f(const std::string &name, float value) override;
+            void setUniformVec3(const std::string &name, const glm::vec3 &value) override;
+            void setDepthMask(bool enabled) override;
+          private:
+            // Backbuffer and cached matrices
+            glm::ivec2 m_Backbuffer{800, 600};
+            glm::mat4 m_lastViewMatrix{1.0f};
+            glm::mat4 m_lastProjectionMatrix{1.0f};
+
+            // Optional window/context pointer if needed by the app (we assume context is current)
+            GLFWwindow *window = nullptr;
+            std::shared_ptr<Arche::Core::LoggingService> mLogger;
+
+            // GL resources for offscreen rendering
+            unsigned int m_frameBuffer = 0;
+            unsigned int m_colorTexture = 0;
+            unsigned int m_depthStencilRbo = 0;
+
+            std::unordered_map<std::string, GLShaderProgram> m_shaders;
+            std::unordered_map<const Mesh *, GLMesh> m_meshes;
+
+            GLShaderProgram *m_currentShader = nullptr;
+
+            // Return references to cache-stored objects (avoid dangling temporaries)
+            GLShaderProgram &getOrCreateShaderProgram(const std::shared_ptr<Shader> &shader);
+            GLMesh &getOrCreateGLMesh(const Mesh &mesh);
+
+            GLint getUniformLocation(GLShaderProgram &program, const std::string &name);
+
+            // Cached view/projection for uniform uploads
+            float m_viewF[16]{};
+            float m_projF[16]{};
+
+            // Clear color
+            glm::vec4 m_clearColor{0.1f, 0.12f, 0.15f, 1.0f};
+
+            // Helpers
+            bool initialiseFrameBuffer();
+        };
     } // namespace Render
 } // namespace Arche

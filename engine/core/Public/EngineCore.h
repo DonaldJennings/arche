@@ -7,9 +7,10 @@
 #include "WorldSystem.h"
 #include <ISubsystem.h>
 #include <LoggingService.h>
-#include <Renderer.h>
 #include <PhysicsSystem.h>
 #include <TimingService.h>
+#include <RenderingSystem.h>
+#include <OpenGLBackend.h>
 
 namespace Arche {
     namespace Core {
@@ -25,9 +26,12 @@ namespace Arche {
                 : loggerService(std::make_shared<LoggingService>()),
                   physicsSystem(std::make_shared<Physics::PhysicsSystem>(loggerService)),
                   timingService(std::make_shared<TimingService>(loggerService)),
-                  worldSystem(std::make_shared<Scene::WorldSystem>(loggerService, timingService)),
-                  renderingSystem(std::make_shared<Render::Renderer>(loggerService)) 
+                  worldSystem(std::make_shared<Scene::WorldSystem>(loggerService, timingService))
             {
+                auto backend = std::make_unique<Arche::Render::OpenGLBackend>();
+                backend->setLogger(loggerService);
+                renderingSystem = std::make_shared<Render::RenderingSystem>(loggerService, std::move(backend));
+
                 registerSubsystem(worldSystem);
             }
 
@@ -40,7 +44,7 @@ namespace Arche {
             /**
              * @brief Initializes internal state and resources required before using the module or library.
              */
-            void initialise(GLFWwindow *externalWindow);
+            void initialise();
 
             /**
              * @brief Runs the program's main loop.
@@ -55,7 +59,7 @@ namespace Arche {
             // Getters for services accessible to subsystems
             std::shared_ptr<TimingService> getTimingService() const { return timingService; }
             std::shared_ptr<LoggingService> getLoggingService() const { return loggerService; }
-            std::shared_ptr<Render::Renderer> getRenderer() const { return renderingSystem; }
+            std::shared_ptr<Render::RenderingSystem> getRenderer() const { return renderingSystem; }
             std::shared_ptr<Scene::WorldSystem> getWorld() const { return worldSystem; }
 
           private:
@@ -63,7 +67,7 @@ namespace Arche {
             std::shared_ptr<Physics::PhysicsSystem> physicsSystem;
             std::shared_ptr<TimingService> timingService;
             std::shared_ptr<Arche::Scene::WorldSystem> worldSystem;
-            std::shared_ptr<Render::Renderer> renderingSystem;
+            std::shared_ptr<Render::RenderingSystem> renderingSystem;
             std::vector<std::shared_ptr<ISubsystem>> subsystems;
             bool isRunning{false};
         };

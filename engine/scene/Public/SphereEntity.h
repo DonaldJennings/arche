@@ -9,17 +9,18 @@ namespace Arche {
         class SphereEntity : public IEntity {
           public:
             SphereEntity(float radius, glm::vec3 position, bool physicsEnabled = true)
-                : m_radius{radius}, m_position{position}, m_rotation{0.0f, 0.0f, 0.0f}, m_scale(radius) 
-            {
+                : m_radius{radius}, m_position{position}, m_rotation{0.0f, 0.0f, 0.0f}, m_scale(radius) {
                 // Initialize the collider as a sphere collider
-                m_collider = std::make_shared<Physics::SphereCollider>(m_radius, &position);
+                m_collider = std::make_shared<Physics::SphereCollider>(m_radius, &m_position);
                 // If physics is enabled, set up the rigid body
+                m_rigidBody = std::make_shared<Physics::RigidBody>(1.0f);
                 if (physicsEnabled) {
-                    m_rigidBody = std::make_shared<Physics::RigidBody>(1.0f);
                     m_rigidBody->setUseGravity(true);
                 } else {
                     m_rigidBody->setStatic(true); // Make it static if physics is disabled
                 }
+
+                m_renderable = std::make_shared<Render::NamedRenderable>("uv_sphere.mesh", "uv_sphere.mat");
             }
 
             // Getters and setters
@@ -37,7 +38,11 @@ namespace Arche {
             // Getters for other systems
             std::shared_ptr<Physics::RigidBody> getRigidBody() override { return m_rigidBody; };
             std::shared_ptr<Physics::ICollider> getCollider() override { return m_collider; };
-            std::shared_ptr<Render::IRenderable> getRenderable() override { return m_renderable; };
+
+            std::string_view getMeshId() override { return m_renderable->getMeshName(); };
+            std::string_view getMaterialId() override { return m_renderable->getMaterialName(); };
+            std::string_view getShaderId() override { return m_renderable->getMaterialName(); };
+
             std::string_view getName() const override { return m_name; };
             std::uint64_t getID() const override { return m_id; };
             void setID(std::uint64_t id) override { m_id = id; };

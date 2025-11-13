@@ -39,11 +39,11 @@ namespace Arche {
                 height = newHeight;
             }
 
-            void attachCamera(std::shared_ptr<Arche::Scene::Camera> camera) { mainViewportCamera = camera; }
+            void attachCamera(std::shared_ptr<Arche::Render::Camera> camera) { mainViewportCamera = camera; }
             // Recreate framebuffer attachments for the current width/height.
             bool recreateFrameBuffer();
 
-            std::shared_ptr<Arche::Scene::Camera> getAttachedCamera() const { return mainViewportCamera; }
+            std::shared_ptr<Arche::Render::Camera> getAttachedCamera() const { return mainViewportCamera; }
 
             void setClearColour(float r, float g, float b, float a) { clearColor = {r, g, b, a}; }
 
@@ -63,7 +63,7 @@ namespace Arche {
             bool initialiseFrameBuffer();
 
             std::shared_ptr<Arche::Core::LoggingService> mLogger;
-            std::shared_ptr<Scene::Camera> mainViewportCamera;
+            std::shared_ptr<Render::Camera> mainViewportCamera;
 
             glm::vec4 clearColor{0.1f, 0.12f, 0.15f, 1.0f};
         };

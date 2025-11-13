@@ -26,7 +26,7 @@ namespace Arche {
             return p;
         }
 
-        void CameraController::attachCamera(std::shared_ptr<Arche::Scene::Camera> cam) noexcept {
+        void CameraController::attachCamera(std::shared_ptr<Arche::Render::Camera> cam) noexcept {
             camera = cam;
             if (camera) {
                 updateCamera();
@@ -35,10 +35,14 @@ namespace Arche {
 
         void CameraController::detachCamera() noexcept { camera.reset(); }
 
-        void CameraController::rotate(float deltaYawRadians, float deltaPitchRadians) noexcept {
-            yaw += deltaYawRadians * rotateSpeed;
-            pitch += deltaPitchRadians * rotateSpeed;
-            pitch = clampPitch(pitch);
+        void CameraController::rotate(float yawDeltaDeg, float pitchDeltaDeg) noexcept {
+            yaw   += yawDeltaDeg;
+            pitch += pitchDeltaDeg;
+            // keep yaw bounded (degrees)
+            if (yaw > 180.0f)  yaw -= 360.0f;
+            if (yaw < -180.0f) yaw += 360.0f;
+            // clamp pitch (degrees)
+            pitch = glm::clamp(pitch, -89.0f, 89.0f);
         }
 
         void CameraController::zoom(float delta) noexcept {
@@ -51,79 +55,65 @@ namespace Arche {
 
         void CameraController::pan(float dx, float dy) noexcept {
             // Right-handed: yaw=0 faces -Z, up=+Y, right=+X.
+            const double yawR = glm::radians(static_cast<double>(yaw)); // convert to radians
             glm::dvec3 t{ target.x, target.y, target.z };
 
-            const double sy = std::sin(static_cast<double>(yaw));
-            const double cy = std::cos(static_cast<double>(yaw));
-
-            // Yaw-only right vector and world up
-            const glm::dvec3 right{ cy, 0.0, sy };
+            const glm::dvec3 right{ std::cos(yawR), 0.0, std::sin(yawR) };
             const glm::dvec3 up{ 0.0, 1.0, 0.0 };
 
             const double scale = static_cast<double>(panSpeed * distance);
             t += right * (static_cast<double>(dx) * scale);
             t += up    * (static_cast<double>(dy) * scale);
 
-            target.x = t.x;
-            target.y = t.y;
-            target.z = t.z;
+            target = glm::vec3(t);
         }
 
-        void CameraController::moveLocal(float forwardAmount, float rightAmount, float upAmount) noexcept {
-            // Right-handed basis from yaw only (no pitch in strafing):
-            // yaw=0 => forward = (0,0,-1), right = (1,0,0)
-            glm::dvec3 t{ target.x, target.y, target.z };
+        void CameraController::moveLocal(float forward, float right, float up) {
+            if (!camera) return;
 
-            const double sy = std::sin(static_cast<double>(yaw));
-            const double cy = std::cos(static_cast<double>(yaw));
+            // radians
+            const double yawR   = glm::radians(yaw);
+            const double pitchR = glm::radians(pitch);
 
-            const glm::dvec3 forwardDir{ -sy, 0.0, -cy };
-            const glm::dvec3 rightDir{    cy, 0.0,  sy };
-            const glm::dvec3 upDir{ 0.0, 1.0, 0.0 };
+            // camera basis from yaw/pitch
+            const double cy = std::cos(yawR),  sy = std::sin(yawR);
+            const double cp = std::cos(pitchR), sp = std::sin(pitchR);
 
-            const double fMove = static_cast<double>(forwardAmount);
-            const double rMove = static_cast<double>(rightAmount);
-            const double uMove = static_cast<double>(upAmount);
+            // -Z forward convention (OpenGL-style)
+            glm::dvec3 f = glm::normalize(glm::dvec3(sy * cp, -sp, -cy * cp));
+            glm::dvec3 r = glm::normalize(glm::cross(f, glm::dvec3(0.0, 1.0, 0.0)));
+            glm::dvec3 u = glm::normalize(glm::cross(r, f));
 
-            t += forwardDir * fMove + rightDir * rMove + upDir * uMove;
+            // accumulate in world space
+            position += f * static_cast<double>(forward)
+                     +  r * static_cast<double>(right)
+                     +  u * static_cast<double>(up);
 
-            // Sync back to controller target
-            target.x = t.x;
-            target.y = t.y;
-            target.z = t.z;
+            camera->SetPosition(position);
         }
 
         void CameraController::updateCamera() noexcept {
-            if (!camera)
-                return;
+            const double yawR   = glm::radians(yaw);
+            const double pitchR = glm::radians(pitch);
+            const double cy = std::cos(yawR),  sy = std::sin(yawR);
+            const double cp = std::cos(pitchR), sp = std::sin(pitchR);
+            glm::dvec3 f = glm::normalize(glm::dvec3(sy * cp, -sp, -cy * cp));
+            glm::dvec3 up(0.0, 1.0, 0.0);
 
-            // Build forward vector from yaw/pitch (right-handed, yaw=0 -> -Z)
-            const double sy = std::sin(static_cast<double>(yaw));
-            const double cy = std::cos(static_cast<double>(yaw));
-            const double sp = std::sin(static_cast<double>(pitch));
-            const double cp = std::cos(static_cast<double>(pitch));
+            // If your Camera supports LookAt:
+            // camera->setPerspective(position_, position_ + f, up);
 
-            const glm::dvec3 forward{
-                cp * sy,
-                sp,
-                -cp * cy
-            };
-
-            const glm::dvec3 tgt{ static_cast<double>(target.x), static_cast<double>(target.y), static_cast<double>(target.z) };
-            const glm::dvec3 eye = tgt - forward * static_cast<double>(distance);
-
-            camera->SetPosition(eye);
-            camera->SetPitch(static_cast<double>(pitch * RAD_TO_DEG));
-            camera->SetYaw(static_cast<double>(yaw * RAD_TO_DEG));
+            // Or if it stores yaw/pitch:
+            camera->SetPosition(position);
+            camera->SetYaw(yaw);
+            camera->SetPitch(pitch);
         }
 
         void CameraController::updateOrientationOnly() noexcept {
-            if (!camera)
-                return;
-
-            // Keep current camera position, only update orientation
-            camera->SetPitch(static_cast<double>(pitch * RAD_TO_DEG));
-            camera->SetYaw(static_cast<double>(yaw * RAD_TO_DEG));
+            if (!camera) return;
+            // yaw/pitch are already in degrees; set directly
+            camera->SetYaw(yaw);
+            camera->SetPitch(pitch);
         }
 
         void CameraController::setDistance(float d) noexcept { distance = clamp(d, minDistance, maxDistance); }
@@ -132,8 +122,8 @@ namespace Arche {
         void CameraController::setRotateSpeed(float s) noexcept { rotateSpeed = s; }
         void CameraController::setZoomSpeed(float s) noexcept { zoomSpeed = s; }
 
-        float CameraController::getYawDegrees() const noexcept { return yaw * RAD_TO_DEG; }
-        float CameraController::getPitchDegrees() const noexcept { return pitch * RAD_TO_DEG; }
+        float CameraController::getYawDegrees() const noexcept   { return yaw; }
+        float CameraController::getPitchDegrees() const noexcept { return pitch; }
 
     } // namespace GUI
 } // namespace Arche

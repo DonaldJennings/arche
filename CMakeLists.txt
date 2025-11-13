@@ -26,6 +26,10 @@ set(GLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/glm)
 
 find_package(OpenGL REQUIRED)
 
+set(ENGINE_ASSET_DIR "${CMAKE_SOURCE_DIR}/engine/assets")
+add_compile_definitions(ENGINE_ASSET_DIR="${ENGINE_ASSET_DIR}")
+
+
 # Include the engine backend
 add_subdirectory(engine)
 

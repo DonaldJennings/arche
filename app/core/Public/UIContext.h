@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer.h"
+#include <RenderingSystem.h>
 #include <LoggingService.h>
 #include <WorldSystem.h>
 #include <EngineCore.h>
@@ -17,7 +17,7 @@ namespace Arche {
 
             std::shared_ptr<Arche::Core::LoggingService> logger() const { return engineCore->getLoggingService(); }
 
-            std::shared_ptr<Arche::Render::Renderer> renderer() const { return engineCore->getRenderer(); }
+            std::shared_ptr<Arche::Render::RenderingSystem> renderer() const { return engineCore->getRenderer(); }
 
             std::shared_ptr<Arche::Scene::WorldSystem> worldSystem() const { return engineCore->getWorld(); }
 

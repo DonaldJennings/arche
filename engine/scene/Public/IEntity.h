@@ -32,7 +32,10 @@ namespace Arche {
 
             virtual std::shared_ptr<Physics::RigidBody> getRigidBody() = 0;
             virtual std::shared_ptr<Physics::ICollider> getCollider() = 0;
-            virtual std::shared_ptr<Render::IRenderable> getRenderable() = 0;
+
+            virtual std::string_view getMeshId() = 0;
+            virtual std::string_view getMaterialId() = 0;
+            virtual std::string_view getShaderId() = 0;
             
             virtual std::string_view getName() const = 0;
         };

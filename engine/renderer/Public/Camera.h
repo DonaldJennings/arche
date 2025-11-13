@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 
 namespace Arche {
-    namespace Scene {
+    namespace Render {
 
         class Camera {
           public:
@@ -31,8 +31,8 @@ namespace Arche {
             glm::dvec3 screenToWorldRay(float screenX, float screenY, float viewportWidth, float viewportHeight);
 
             // Keep legacy layout: column-major 4x4 matrix as 16 double values
-            glm::dmat4 GetViewMatrix();
-            glm::dmat4 GetProjectionMatrix();
+            glm::dmat4 GetViewMatrix() const ;
+            glm::dmat4 GetProjectionMatrix() const;
 
           private:
             void RecalculateViewMatrix();

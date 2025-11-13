@@ -8,7 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Arche {
-namespace Scene {
+namespace Render {
 
 // Helper using GLM utilities
 static double DegToRad(double d) { return glm::radians(d); }
@@ -54,13 +54,11 @@ void Camera::setPerspective(double fovY, double aspectRatio, double nearPlane, d
     RecalculateProjectionMatrix();
 }
 
-glm::dmat4 Camera::GetViewMatrix() {
-    RecalculateViewMatrix();
+glm::dmat4 Camera::GetViewMatrix() const {
     return viewMatrix_;
 }
 
-glm::dmat4 Camera::GetProjectionMatrix() {
-    RecalculateProjectionMatrix();
+glm::dmat4 Camera::GetProjectionMatrix() const {
     return projectionMatrix_;
 }
 

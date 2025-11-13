@@ -91,7 +91,6 @@ namespace Arche {
                 static ImVec4 clear = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
                 if (ImGui::ColorEdit4("Background Colour", (float*)(&clear))) {
                     // Update the renderer's clear color
-                    context->renderer()->setClearColour(clear.x, clear.y, clear.z, clear.w);
                 }
 
             } else {

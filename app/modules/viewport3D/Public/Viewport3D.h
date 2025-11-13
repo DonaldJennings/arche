@@ -21,14 +21,14 @@ namespace Arche {
             std::string name;
             std::shared_ptr<Arche::GUI::UIContext> context;
             std::shared_ptr<CameraController> cameraController;
-            std::shared_ptr<Arche::Scene::Camera> attachedCamera;
+            std::shared_ptr<Arche::Render::Camera> attachedCamera;
 
             void Reset();
 
             // Refactored helper methods (implementation in .cpp)
             void DrawBackgroundAndRenderer(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
                                            const ImVec2 &canvasSize, ImDrawList *drawList,
-                                           std::shared_ptr<Arche::Scene::Camera> camera);
+                                           std::shared_ptr<Arche::Render::Camera> camera);
 
             void HandleSelectionAndMarkers(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
                                            const ImVec2 &canvasSize, const ImVec2 &mousePos,
@@ -36,15 +36,15 @@ namespace Arche {
                                            const glm::dmat4 &projectionMatrix, ImDrawList *drawList);
 
             void HandleCameraInput(const ImVec2 &canvasP0, const ImVec2 &canvasP1, const ImVec2 &canvasSize,
-                                   std::shared_ptr<Arche::Scene::Camera> camera);
+                                   std::shared_ptr<Arche::Render::Camera> camera);
 
             void HandleContextMenu(const ImVec2 &canvasP0, const ImVec2 &canvasSize, const ImVec2 &mousePos,
-                                   std::shared_ptr<Arche::Scene::Camera> camera);
+                                   std::shared_ptr<Arche::Render::Camera> camera);
 
             void HandleEditPopup(const ImVec2 &canvasP0, const ImVec2 &canvasSize);
 
             void DrawCameraOverlay(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
-                                   std::shared_ptr<Arche::Scene::Camera> camera);
+                                   std::shared_ptr<Arche::Render::Camera> camera);
         };
     } // namespace GUI
 } // namespace Arche
