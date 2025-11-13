@@ -86,6 +86,50 @@ namespace
         inds.insert(inds.end(), std::begin(faceIndices), std::end(faceIndices));
         return mesh;
     }
+
+    std::shared_ptr<Arche::Render::Mesh> MakePlaneMesh(const std::string &name, float sizeX, float sizeZ, uint32_t segX,
+                                                  uint32_t segZ) {
+        using Arche::Render::Mesh;
+        auto mesh = std::make_shared<Mesh>(name);
+        mesh->setPrimitive(Mesh::Primitive::Triangles);
+        auto &verts = mesh->vertices();
+        auto &inds = mesh->indices();
+        verts.clear();
+        inds.clear();
+        for (uint32_t z = 0; z <= segZ; ++z) {
+            float fz = float(z) / float(segZ);
+            float posZ = (fz - 0.5f) * sizeZ;
+            for (uint32_t x = 0; x <= segX; ++x) {
+                float fx = float(x) / float(segX);
+                float posX = (fx - 0.5f) * sizeX;
+                glm::vec3 p(posX, 0.0f, posZ);
+                glm::vec3 n(0.0f, 1.0f, 0.0f);
+                glm::vec2 uv(fx, fz);
+                Mesh::Vertex vert{};
+                vert.position = p;
+                vert.normal = n;
+                vert.uv = uv;
+                verts.push_back(vert);
+            }
+        }
+        auto idx = [&](uint32_t x, uint32_t z) { return z * (segX + 1) + x; };
+        for (uint32_t z = 0; z < segZ; ++z) {
+            for (uint32_t x = 0; x < segX; ++x) {
+                uint32_t i0 = idx(x, z);
+                uint32_t i1 = idx(x + 1, z);
+                uint32_t i2 = idx(x, z + 1);
+                uint32_t i3 = idx(x + 1, z + 1);
+                // two triangles per quad
+                inds.push_back(i0);
+                inds.push_back(i2);
+                inds.push_back(i1);
+                inds.push_back(i1);
+                inds.push_back(i2);
+                inds.push_back(i3);
+            }
+        }
+        return mesh;
+    }
 }
 
 namespace Arche {
@@ -166,6 +210,14 @@ void main(){
                 cubeMat->setBaseColor(glm::vec4(0.2f, 0.9f, 0.3f, 1.0f));
                 cubeMat->setShader(flatShader);
                 resources.registerMaterial(cubeMat);
+            }
+            {
+                auto planeMesh = MakePlaneMesh("plane.mesh", 10.0f, 10.0f, 10, 10);
+                resources.registerMesh(planeMesh);
+                auto planeMat = std::make_shared<Render::Material>("plane.mat");
+                planeMat->setBaseColor(glm::vec4(0.7f, 0.7f, 0.7f, 1.0f));
+                planeMat->setShader(flatShader);
+                resources.registerMaterial(planeMat);
             }
         }
 

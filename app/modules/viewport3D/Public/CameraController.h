@@ -39,7 +39,7 @@ public:
     void pan(float dx, float dy) noexcept;
 
     // Move camera in local space (forward/right/up) by given amounts.
-    void moveLocal(float forwardAmount, float rightAmount, float upAmount) noexcept;
+    void moveLocal(float forwardAmount, float rightAmount, float upAmount);
 
     // Immediately apply controller state to attached Camera.
     // - updateCamera: orbit-style update (position changes based on yaw/pitch/distance/target)
@@ -73,6 +73,7 @@ private:
     float distance{5.0f};   // radius from target
     float yaw{0.0f};        // radians
     float pitch{0.0f};      // radians
+    glm::vec3 position{0.0, 0.0, 5.0}; // cached position (world space)
 
     // target in world space (panning)
     glm::vec3 target{0.0, 0.0, 0.0};

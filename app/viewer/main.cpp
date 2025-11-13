@@ -59,7 +59,7 @@ int main() {
         engineCore->initialise();
 
         engineCore->getWorld()->addEntity(
-            std::make_shared<Arche::Scene::SphereEntity>(10.0f, glm::vec3(0.0f, 10.0f, -15.0f)));
+            std::make_shared<Arche::Scene::SphereEntity>(2.50f, glm::vec3(0.0f, 10.0f, -15.0f)));
 
         engineCore->getTimingService()->pause();
         // 6. Main loop
