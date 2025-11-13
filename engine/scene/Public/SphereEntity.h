@@ -19,6 +19,8 @@ namespace Arche {
                 } else {
                     m_rigidBody->setStatic(true); // Make it static if physics is disabled
                 }
+
+                m_renderable = std::make_shared<Render::NamedRenderable>("uv_sphere.mesh", "uv_sphere.mat");
             }
 
             // Getters and setters
@@ -36,7 +38,11 @@ namespace Arche {
             // Getters for other systems
             std::shared_ptr<Physics::RigidBody> getRigidBody() override { return m_rigidBody; };
             std::shared_ptr<Physics::ICollider> getCollider() override { return m_collider; };
-            std::shared_ptr<Render::IRenderable> getRenderable() override { return m_renderable; };
+
+            std::string_view getMeshId() override { return m_renderable->getMeshName(); };
+            std::string_view getMaterialId() override { return m_renderable->getMaterialName(); };
+            std::string_view getShaderId() override { return "flat.color"; };
+
             std::string_view getName() const override { return m_name; };
             std::uint64_t getID() const override { return m_id; };
             void setID(std::uint64_t id) override { m_id = id; };

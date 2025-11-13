@@ -20,7 +20,7 @@ namespace Arche {
             const std::string& getName() const { return m_name; }
 
             void setShader(std::shared_ptr<Shader> shader) { m_shader = std::move(shader); }
-            const std::shared_ptr<Shader>& getShader() const { return m_shader; }
+            const std::shared_ptr<Shader> getShader() const { return m_shader; }
 
             // Common parameters you can extend as needed
             void setBaseColor(const glm::vec4& c) { m_baseColor = c; }

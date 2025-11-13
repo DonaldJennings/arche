@@ -9,7 +9,8 @@ namespace Arche {
         class CubeEntity : public IEntity {
           public:
             CubeEntity(const glm::vec3 &halfExtents, const glm::vec3 &position, bool physicsEnabled = true)
-                : m_Position(position), m_Rotation(0.0f), m_Scale(1.0f), m_HalfExtents(halfExtents) {
+                : m_Position(position), m_Rotation(0.0f), m_Scale(1.0f), m_HalfExtents(halfExtents),
+                  m_Renderable{std::make_shared<Render::NamedRenderable>("cube.mesh", "cube.mat")} {
                 if (physicsEnabled) {
                     m_Rigidbody = std::make_shared<Physics::RigidBody>(1.0f);
                     m_Collider = std::make_shared<Physics::CubeCollider>(halfExtents, &m_Position);
@@ -35,7 +36,10 @@ namespace Arche {
             // --- Components ---
             std::shared_ptr<Physics::RigidBody> getRigidBody() override { return m_Rigidbody; }
             std::shared_ptr<Physics::ICollider> getCollider() override { return m_Collider; }
-            std::shared_ptr<Render::IRenderable> getRenderable() override { return nullptr; }
+
+            std::string_view getMeshId() override { return m_Renderable->getMeshName(); }
+            std::string_view getMaterialId() override { return m_Renderable->getMaterialName(); }
+            std::string_view getShaderId() override { return "flat.color"; }
 
             // --- Identification ---
             std::uint64_t getID() const override { return m_id; }
@@ -57,6 +61,7 @@ namespace Arche {
 
             std::shared_ptr<Physics::RigidBody> m_Rigidbody;
             std::shared_ptr<Physics::ICollider> m_Collider;
+            std::shared_ptr<Render::NamedRenderable> m_Renderable;
         };
     } // namespace Scene
 } // namespace Arche

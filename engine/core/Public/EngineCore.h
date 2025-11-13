@@ -7,10 +7,10 @@
 #include "WorldSystem.h"
 #include <ISubsystem.h>
 #include <LoggingService.h>
-#include <Renderer.h>
 #include <PhysicsSystem.h>
 #include <TimingService.h>
 #include <RenderingSystem.h>
+#include <OpenGLBackend.h>
 
 namespace Arche {
     namespace Core {
@@ -27,7 +27,7 @@ namespace Arche {
                   physicsSystem(std::make_shared<Physics::PhysicsSystem>(loggerService)),
                   timingService(std::make_shared<TimingService>(loggerService)),
                   worldSystem(std::make_shared<Scene::WorldSystem>(loggerService, timingService)),
-                  renderingSystem(std::make_shared<Render::RenderingSystem>(loggerService)) 
+                  renderingSystem(std::make_shared<Render::RenderingSystem>(loggerService, std::make_unique<Arche::Render::OpenGLBackend>())) 
             {
                 registerSubsystem(worldSystem);
             }
@@ -41,7 +41,7 @@ namespace Arche {
             /**
              * @brief Initializes internal state and resources required before using the module or library.
              */
-            void initialise(GLFWwindow *externalWindow);
+            void initialise();
 
             /**
              * @brief Runs the program's main loop.

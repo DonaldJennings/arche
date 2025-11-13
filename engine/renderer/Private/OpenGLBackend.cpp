@@ -1,37 +1,13 @@
-#include "OpenGLBackend.h"
+#include <glad/glad.h>
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
 
-#include <glad/glad.h>
+#include "OpenGLBackend.h"
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
-
-// Minimal point sprite shader sources (adapted from Renderer.cpp)
-static const char *kPointVS = R"glsl(
-#version 460 core
-layout(location = 0) in vec3 inPosition;
-uniform mat4 uView;
-uniform mat4 uProj;
-uniform float uPointSize;
-void main() {
-    gl_Position = uProj * uView * vec4(inPosition, 1.0);
-    gl_PointSize = uPointSize;
-}
-)glsl";
-
-static const char *kPointFS = R"glsl(
-#version 460 core
-out vec4 fragColor;
-uniform vec3 uPointColor;
-void main() {
-    float r = dot(gl_PointCoord - vec2(0.5), gl_PointCoord - vec2(0.5));
-    if (r > 0.25) discard;
-    fragColor = vec4(uPointColor, 1.0);
-}
-)glsl";
 
 namespace {
     GLuint compileShader(GLenum type, const char *src) {
@@ -64,11 +40,72 @@ namespace {
         }
         return prog;
     }
-}
+
+    static std::string prependDefines(const std::string &source,
+                                      const std::unordered_map<std::string, std::string> &defines) {
+        if (defines.empty())
+            return source;
+
+        std::string header;
+        header.reserve(defines.size() * 32); // rough estimate
+
+        for (const auto &[name, value] : defines) {
+            header += "#define " + name + " " + value + "\n";
+        }
+
+        header += "\n";
+        return header + source;
+    }
+} // namespace
 
 using namespace Arche::Render;
 
 OpenGLBackend::OpenGLBackend() = default;
+
+GLint OpenGLBackend::getUniformLocation(GLShaderProgram &program, const std::string &name) {
+    auto it = program.uniformLocations.find(name);
+    if (it != program.uniformLocations.end()) {
+        return it->second;
+    }
+    GLint loc = glGetUniformLocation(program.programID, name.c_str());
+    program.uniformLocations[name] = loc;
+    return loc;
+}
+
+GLShaderProgram &OpenGLBackend::getOrCreateShaderProgram(const std::shared_ptr<Shader> &shader) {
+    auto it = m_shaders.find(shader->getName());
+    if (it != m_shaders.end()) {
+        return it->second;
+    }
+
+    // Build final GLSL sources with defines injected
+    const Shader::Sources &srcs{shader->getSources()};
+    std::string vertSrc{prependDefines(srcs.vertexGLSL, shader->getDefines())};
+    std::string fragSrc{prependDefines(srcs.fragmentGLSL, shader->getDefines())};
+
+    GLuint vs = compileShader(GL_VERTEX_SHADER, vertSrc.c_str());
+    GLuint fs = compileShader(GL_FRAGMENT_SHADER, fragSrc.c_str());
+
+    if (!vs || !fs) {
+        if (vs)
+            glDeleteShader(vs);
+        if (fs)
+            glDeleteShader(fs);
+        // Insert a dummy program to avoid repeated compile attempts
+        auto [insIt, _] = m_shaders.emplace(shader->getName(), GLShaderProgram{});
+        return insIt->second;
+    }
+
+    GLuint programID{linkProgram(vs, fs)};
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    GLShaderProgram program;
+    program.programID = programID;
+
+    auto [iteratorToProgram, inserted] = m_shaders.emplace(shader->getName(), std::move(program));
+    return iteratorToProgram->second;
+}
 
 void OpenGLBackend::initialise() {
     // We assume an OpenGL context is already current (created by the app / ImGui layer)
@@ -77,11 +114,12 @@ void OpenGLBackend::initialise() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    // Reduce chances of rehash invalidating references
+    m_shaders.reserve(8);
+    m_meshes.reserve(64);
+
     // Create FBO and color/depth attachments
     initialiseFrameBuffer();
-
-    // Create minimal point pipeline
-    ensurePointPipeline();
 
     // Default cached matrices: identity
     for (int i = 0; i < 16; ++i) {
@@ -92,46 +130,67 @@ void OpenGLBackend::initialise() {
 
 void OpenGLBackend::shutdown() noexcept {
     // FBO resources
-    if (m_colorTexture) { glDeleteTextures(1, &m_colorTexture); m_colorTexture = 0; }
-    if (m_depthStencilRbo) { glDeleteRenderbuffers(1, &m_depthStencilRbo); m_depthStencilRbo = 0; }
-    if (m_frameBuffer) { glDeleteFramebuffers(1, &m_frameBuffer); m_frameBuffer = 0; }
+    if (m_colorTexture) {
+        glDeleteTextures(1, &m_colorTexture);
+        m_colorTexture = 0;
+    }
+    if (m_depthStencilRbo) {
+        glDeleteRenderbuffers(1, &m_depthStencilRbo);
+        m_depthStencilRbo = 0;
+    }
+    if (m_frameBuffer) {
+        glDeleteFramebuffers(1, &m_frameBuffer);
+        m_frameBuffer = 0;
+    }
 
-    // Pipeline resources
-    if (m_pointVBO) { glDeleteBuffers(1, &m_pointVBO); m_pointVBO = 0; }
-    if (m_pointVAO) { glDeleteVertexArrays(1, &m_pointVAO); m_pointVAO = 0; }
-    if (m_pointProgram) { glDeleteProgram(m_pointProgram); m_pointProgram = 0; }
+    // Mesh resources
+    for (auto &[key, glMesh] : m_meshes) {
+        if (glMesh.elementBufferObject)
+            glDeleteBuffers(1, &glMesh.elementBufferObject);
+        if (glMesh.vertexBufferObject)
+            glDeleteBuffers(1, &glMesh.vertexBufferObject);
+        if (glMesh.vertexArrayObject)
+            glDeleteVertexArrays(1, &glMesh.vertexArrayObject);
+    }
+    m_meshes.clear();
+
+    // Shader programs
+    for (auto &[name, glProg] : m_shaders) {
+        if (glProg.programID)
+            glDeleteProgram(glProg.programID);
+    }
+    m_shaders.clear();
+
+    m_currentShader = nullptr;
 }
 
 void OpenGLBackend::resize(glm::ivec2 newSize) {
-    if (newSize.x <= 0 || newSize.y <= 0) return;
+    if (newSize.x <= 0 || newSize.y <= 0)
+        return;
     m_Backbuffer = newSize;
 
     // Recreate FBO at new size
-    if (m_frameBuffer) { glDeleteFramebuffers(1, &m_frameBuffer); m_frameBuffer = 0; }
-    if (m_colorTexture) { glDeleteTextures(1, &m_colorTexture); m_colorTexture = 0; }
-    if (m_depthStencilRbo) { glDeleteRenderbuffers(1, &m_depthStencilRbo); m_depthStencilRbo = 0; }
+    if (m_frameBuffer) {
+        glDeleteFramebuffers(1, &m_frameBuffer);
+        m_frameBuffer = 0;
+    }
+    if (m_colorTexture) {
+        glDeleteTextures(1, &m_colorTexture);
+        m_colorTexture = 0;
+    }
+    if (m_depthStencilRbo) {
+        glDeleteRenderbuffers(1, &m_depthStencilRbo);
+        m_depthStencilRbo = 0;
+    }
 
     initialiseFrameBuffer();
 }
 
 void OpenGLBackend::beginFrame() {
-    // Bind offscreen FBO and clear
     glBindFramebuffer(GL_FRAMEBUFFER, m_frameBuffer);
     glViewport(0, 0, m_Backbuffer.x, m_Backbuffer.y);
     glClearColor(m_clearColor.r, m_clearColor.g, m_clearColor.b, m_clearColor.a);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    if (m_pointProgram) {
-        glUseProgram(m_pointProgram);
-        // Upload cached matrices once per frame
-        GLint locView = glGetUniformLocation(m_pointProgram, "uView");
-        GLint locProj = glGetUniformLocation(m_pointProgram, "uProj");
-        if (locView >= 0) glUniformMatrix4fv(locView, 1, GL_FALSE, m_viewF);
-        if (locProj >= 0) glUniformMatrix4fv(locProj, 1, GL_FALSE, m_projF);
-        // Set default color
-        GLint locColor = glGetUniformLocation(m_pointProgram, "uPointColor");
-        if (locColor >= 0) glUniform3f(locColor, 0.9f, 0.6f, 0.2f);
-    }
 }
 
 void OpenGLBackend::endFrame() {
@@ -148,40 +207,118 @@ void OpenGLBackend::setViewProjection(const glm::mat4 &view, const glm::mat4 &pr
     }
 }
 
-void OpenGLBackend::setShader(const std::shared_ptr<Shader> /*shader*/) {
-    // Placeholder: backend uses its own minimal shader for point rendering.
+void OpenGLBackend::setShader(const std::shared_ptr<Shader> shader) {
+
+    if (!shader) {
+        m_currentShader = nullptr;
+        glUseProgram(0);
+        return;
+    }
+
+    GLShaderProgram &prog = getOrCreateShaderProgram(shader);
+    m_currentShader = &prog;
+    glUseProgram(prog.programID);
+
+    if (m_currentShader) {
+        GLint locView = getUniformLocation(*m_currentShader, "uView");
+        GLint locProj = getUniformLocation(*m_currentShader, "uProj");
+        if (locView >= 0)
+            glUniformMatrix4fv(locView, 1, GL_FALSE, m_viewF);
+        if (locProj >= 0)
+            glUniformMatrix4fv(locProj, 1, GL_FALSE, m_projF);
+    }
 }
 
-void OpenGLBackend::setMaterial(const Material & /*material*/) {
-    // Placeholder: set uniforms/textures from your material system here.
-}
+GLMesh &OpenGLBackend::getOrCreateGLMesh(const Mesh &mesh) {
+    // First check the cache for the mesh
+    auto meshIterator{m_meshes.find(&mesh)};
+    if (meshIterator != m_meshes.end()) {
+        return meshIterator->second;
+    }
 
-void OpenGLBackend::drawMesh(const Mesh & /*mesh*/, const glm::mat4 &model) {
-    if (!m_pointProgram) return;
+    // Otherwise create a mesh in the cache
+    GLMesh gl{};
+    glGenVertexArrays(1, &gl.vertexArrayObject);
+    glGenBuffers(1, &gl.vertexBufferObject);
+    glGenBuffers(1, &gl.elementBufferObject);
 
-    // Minimal point draw at model origin, derive point-size from model scale X
-    glm::vec3 p = glm::vec3(model * glm::vec4(0, 0, 0, 1));
-    float pos[3] = { p.x, p.y, p.z };
+    glBindVertexArray(gl.vertexArrayObject);
 
-    float sx = glm::length(glm::vec3(model[0]));
-    float pointSize = std::max(1.0f, sx * 2.0f);
+    const auto &vertices{mesh.vertices()};
+    const auto &indices{mesh.indices()};
 
-    GLint locPointSize = glGetUniformLocation(m_pointProgram, "uPointSize");
-    if (locPointSize >= 0) glUniform1f(locPointSize, pointSize);
+    glBindBuffer(GL_ARRAY_BUFFER, gl.vertexBufferObject);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices.size() * sizeof(Mesh::Vertex)),
+                 vertices.empty() ? nullptr : vertices.data(), GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ARRAY_BUFFER, m_pointVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(pos), pos, GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, gl.elementBufferObject);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(indices.size() * sizeof(uint32_t)),
+                 indices.empty() ? nullptr : indices.data(), GL_STATIC_DRAW);
 
-    glBindVertexArray(m_pointVAO);
-    glEnable(GL_PROGRAM_POINT_SIZE);
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_DEPTH_TEST);
+    // Vertex layout
+    GLsizei stride{static_cast<GLsizei>(sizeof(Mesh::Vertex))};
 
-    glDrawArrays(GL_POINTS, 0, 1);
+    // Position
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(Mesh::Vertex, position)));
+
+    // Normal
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(Mesh::Vertex, normal)));
+
+    // UV
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, reinterpret_cast<void *>(offsetof(Mesh::Vertex, uv)));
 
     glBindVertexArray(0);
-    glDisable(GL_PROGRAM_POINT_SIZE);
+
+    gl.indexCount = static_cast<GLsizei>(indices.size());
+    gl.vertexCount = static_cast<GLsizei>(vertices.size());
+
+    auto [iteratorToMesh, inserted] = m_meshes.emplace(&mesh, gl);
+    return iteratorToMesh->second;
+}
+
+void OpenGLBackend::setMaterial(const Material &material) {
+    if (!m_currentShader) {
+        return;
+    }
+
+    if (auto shader = material.getShader()) {
+        setShader(shader);
+    }
+
+    GLint locColor = getUniformLocation(*m_currentShader, "uBaseColor");
+    if (locColor >= 0)
+        glUniform4fv(locColor, 1, glm::value_ptr(material.getBaseColor()));
+
+    GLint locPoint = getUniformLocation(*m_currentShader, "uPointSize");
+    if (locPoint >= 0)
+        glUniform1f(locPoint, material.getPointSize());
+}
+
+void OpenGLBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
+    if (!m_currentShader)
+        return;
+
+    GLint locModel{getUniformLocation(*m_currentShader, "uModel")};
+
+    if (locModel >= 0) {
+        glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(model));
+    }
+
+    GLMesh &glMesh = getOrCreateGLMesh(mesh);
+
+    glBindVertexArray(glMesh.vertexArrayObject);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    if (glMesh.indexCount > 0) {
+        glDrawElements(GL_TRIANGLES, glMesh.indexCount, GL_UNSIGNED_INT, 0);
+    } else {
+        glDrawArrays(GL_TRIANGLES, 0, glMesh.vertexCount);
+    }
 }
 
 bool OpenGLBackend::initialiseFrameBuffer() {
@@ -217,34 +354,5 @@ bool OpenGLBackend::initialiseFrameBuffer() {
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
-    return true;
-}
-
-bool OpenGLBackend::ensurePointPipeline() {
-    if (m_pointProgram) return true;
-
-    GLuint vs = compileShader(GL_VERTEX_SHADER, kPointVS);
-    GLuint fs = compileShader(GL_FRAGMENT_SHADER, kPointFS);
-    if (!vs || !fs) {
-        if (vs) glDeleteShader(vs);
-        if (fs) glDeleteShader(fs);
-        return false;
-    }
-
-    m_pointProgram = linkProgram(vs, fs);
-    glDeleteShader(vs);
-    glDeleteShader(fs);
-
-    if (!m_pointProgram) return false;
-
-    glGenVertexArrays(1, &m_pointVAO);
-    glGenBuffers(1, &m_pointVBO);
-
-    glBindVertexArray(m_pointVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, m_pointVBO);
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glBindVertexArray(0);
-
     return true;
 }

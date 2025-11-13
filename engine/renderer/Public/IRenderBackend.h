@@ -8,9 +8,10 @@
 #include <Camera.h>
 #include <IEntity.h>
 
-class Shader;
-class Material;
-class Mesh;
+// Ensure correct type usage from the Arche::Render namespace
+#include "Shader.h"
+#include "Material.h"
+#include "Mesh.h"
 
 namespace Arche {
     namespace Render {
@@ -28,9 +29,9 @@ namespace Arche {
 
             virtual void setViewProjection(const glm::mat4 &view, const glm::mat4 &projection) = 0;
 
-            virtual void setShader(const std::shared_ptr<Shader> shader) = 0;
-            virtual void setMaterial(const Material &material) = 0;
-            virtual void drawMesh(const Mesh &mesh, const glm::mat4 &model) = 0;
+            virtual void setShader(std::shared_ptr<Arche::Render::Shader> shader) = 0;
+            virtual void setMaterial(const Arche::Render::Material &material) = 0;
+            virtual void drawMesh(const Arche::Render::Mesh &mesh, const glm::mat4 &model) = 0;
             virtual unsigned int getRenderTextureID() const = 0;
 
         };

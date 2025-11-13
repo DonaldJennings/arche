@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Renderer.h"
+#include <RenderingSystem.h>
 #include <LoggingService.h>
 #include <WorldSystem.h>
 #include <EngineCore.h>

@@ -6,7 +6,7 @@
 #include <glm/gtc/matrix_inverse.hpp>
 
 namespace Arche {
-    namespace Scene {
+    namespace Render {
 
         class Camera {
           public:

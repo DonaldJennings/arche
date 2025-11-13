@@ -2,8 +2,8 @@
 
 #include <memory>
 
-#include <Camera.h>
 #include <glm/glm.hpp>
+#include <Camera.h>
 
 namespace Arche {
 namespace GUI {
@@ -26,7 +26,7 @@ public:
     CameraController() = default;
 
     // Attach / detach the engine camera the controller drives.
-    void attachCamera(std::shared_ptr<Arche::Scene::Camera> cam) noexcept;
+    void attachCamera(std::shared_ptr<Arche::Render::Camera> cam) noexcept;
     void detachCamera() noexcept;
 
     // Direct control operations (minimal):
@@ -85,7 +85,7 @@ private:
     float maxDistance{1000.0f};
 
     // Attached engine camera (owned externally)
-    std::shared_ptr<Arche::Scene::Camera> camera;
+    std::shared_ptr<Arche::Render::Camera> camera;
 };
 
 } // namespace GUI

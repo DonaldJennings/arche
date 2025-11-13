@@ -35,7 +35,10 @@ namespace Arche {
             // --- Components ---
             std::shared_ptr<Physics::RigidBody> getRigidBody() override { return m_Rigidbody; }
             std::shared_ptr<Physics::ICollider> getCollider() override { return m_Collider; }
-            std::shared_ptr<Render::IRenderable> getRenderable() override { return m_Renderable; }
+            
+            std::string_view getMeshId() override { return "plane.mesh"; }
+            std::string_view getMaterialId() override { return "plane.mat"; }
+            std::string_view getShaderId() override { return "flat.color"; }
 
             // --- Identification ---
             std::uint64_t getID() const override { return m_id; }

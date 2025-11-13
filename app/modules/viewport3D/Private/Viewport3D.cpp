@@ -52,7 +52,7 @@ namespace Arche {
         // Helper: draw background and renderer texture (handles resize & FBO recreate)
         void Viewport3DPanel::DrawBackgroundAndRenderer(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
                                                         const ImVec2 &canvasSize, ImDrawList *drawList,
-                                                        std::shared_ptr<Arche::Scene::Camera> camera) {
+                                                        std::shared_ptr<Arche::Render::Camera> camera) {
             // Background (under renderer image)
             ImU32 bg = IM_COL32(30, 30, 40, 255);
             drawList->AddRectFilled(canvasP0, canvasP1, bg);
@@ -60,19 +60,19 @@ namespace Arche {
 
             // Draw renderer texture (if any) clipped to canvas
             if (context && context->renderer()) {
-                unsigned int tex = context->renderer()->getRenderTexture();
+                unsigned int tex = context->renderer()->getRenderTextureID();
                 // resize handling (recreate FBO if canvas size changed)
                 int rw = static_cast<int>(canvasSize.x);
                 int rh = static_cast<int>(canvasSize.y);
-                if (rw > 0 && rh > 0 &&
-                    (context->renderer()->getWidth() != rw || context->renderer()->getHeight() != rh)) {
-                    context->renderer()->setViewportSize(rw, rh);
-                    context->renderer()->recreateFrameBuffer();
+
+                glm::ivec2 canvasSizeVec{rw, rh};
+                if (rw > 0 && rh > 0 && (canvasSizeVec != context->renderer()->getBackBufferSize())) {
+                    context->renderer()->onResize(canvasSizeVec);
 
                     // Immediately render current world into new framebuffer so UI samples valid pixels
                     auto worldSystem = context->worldSystem();
                     if (worldSystem) {
-                        context->renderer()->render(worldSystem->view().bodies);
+                        context->renderer()->render(*worldSystem);
                     }
                 }
 
@@ -183,7 +183,7 @@ namespace Arche {
         // Helper: camera input and movement handling (pan/rotate/zoom/keyboard)
         void Viewport3DPanel::HandleCameraInput(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
                                                 const ImVec2 &canvasSize,
-                                                std::shared_ptr<Arche::Scene::Camera> camera) {
+                                                std::shared_ptr<Arche::Render::Camera> camera) {
             if (!cameraController)
                 return;
 
@@ -261,7 +261,7 @@ namespace Arche {
                     cameraController->updateCamera();
 
                     if (context && context->renderer() && worldSystem) {
-                        context->renderer()->render(worldSystem->view().bodies);
+                        context->renderer()->render(*worldSystem);
                     }
                 }
             }
@@ -269,7 +269,7 @@ namespace Arche {
 
         // Helper: context menu (Add Particle Here)
         void Viewport3DPanel::HandleContextMenu(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
-                                                const ImVec2 &mousePos, std::shared_ptr<Arche::Scene::Camera> camera) {
+                                                const ImVec2 &mousePos, std::shared_ptr<Arche::Render::Camera> camera) {
             auto worldSystem = context->worldSystem();
             if (!worldSystem)
                 return;
@@ -281,47 +281,55 @@ namespace Arche {
             if (ImGui::BeginPopup("ViewportContextMenu")) {
                 if (ImGui::BeginMenu("Add...")) {
 
-                    glm::dvec3 rayDir = camera->screenToWorldRay(mousePos.x - canvasP0.x, mousePos.y - canvasP0.y,
-                                                                 canvasSize.x, canvasSize.y);
+                    // Build world ray from cursor (canvas-relative)
+                    glm::dmat4 viewM = camera->GetViewMatrix();
+                    glm::dmat4 projM = camera->GetProjectionMatrix();
+                    glm::dmat4 invVP = glm::inverse(projM * viewM);
 
-                    const double spawnDistance = 20.0;
-                    glm::dvec3 cameraPos = camera->GetPosition();
-                    glm::dvec3 spawnWorldPos = cameraPos + rayDir * spawnDistance;
+                    // Normalized device coordinates
+                    double ndcX = ((mousePos.x - canvasP0.x) / canvasSize.x) * 2.0 - 1.0;
+                    double ndcY = 1.0 - ((mousePos.y - canvasP0.y) / canvasSize.y) * 2.0;
+
+                    glm::dvec4 nearP = invVP * glm::dvec4(ndcX, ndcY, -1.0, 1.0);
+                    glm::dvec4 farP = invVP * glm::dvec4(ndcX, ndcY, 1.0, 1.0);
+                    nearP /= nearP.w;
+                    farP /= farP.w;
+
+                    glm::dvec3 rayOrigin = camera->GetPosition();
+                    glm::dvec3 rayDir = glm::normalize(glm::dvec3(farP - nearP));
+
+                    // Intersect with ground plane Y = 0 (fallback to fixed distance if behind/parallel)
+                    glm::dvec3 spawnWorldPos;
+                    {
+                        double planeY = 0.0;
+                        double denom = rayDir.y;
+                        if (std::abs(denom) > 1e-6) {
+                            double t = (planeY - rayOrigin.y) / denom;
+                            if (t > 0.0) {
+                                spawnWorldPos = rayOrigin + rayDir * t;
+                            } else {
+                                spawnWorldPos = rayOrigin + rayDir * 20.0;
+                            }
+                        } else {
+                            spawnWorldPos = rayOrigin + rayDir * 20.0;
+                        }
+                    }
 
                     if (ImGui::MenuItem("Sphere")) {
-
-                        std::shared_ptr<Scene::SphereEntity> sphere{
-                            std::make_shared<Scene::SphereEntity>(10.0f, spawnWorldPos)};
-
+                        auto sphere = std::make_shared<Scene::SphereEntity>(10.0f, spawnWorldPos);
                         worldSystem->addEntity(sphere);
                     }
                     if (ImGui::MenuItem("Cube")) {
-                        // Example stub for adding a cube or mesh entity
-                        // world->createMesh("cube", transform);
-                        std::shared_ptr<Scene::CubeEntity> cube{
-                            std::make_shared<Scene::CubeEntity>(glm::vec3(10.f), spawnWorldPos)};
-
+                        auto cube = std::make_shared<Scene::CubeEntity>(glm::vec3(10.f), spawnWorldPos);
                         worldSystem->addEntity(cube);
-
-                        ARCHE_LOG_WARNING(context->logger(), "Cubes are not yet implemented.");
                     }
-
                     if (ImGui::MenuItem("Plane")) {
-                        // Example stub for adding a plane or mesh entity
-                        // world->createMesh("plane", transform);
-
-                        std::shared_ptr<Scene::PlaneEntity> plane{
-                            std::make_shared<Scene::PlaneEntity>(spawnWorldPos, 10.0f)};
-
+                        auto plane = std::make_shared<Scene::PlaneEntity>(spawnWorldPos, 10.0f);
                         worldSystem->addEntity(plane);
-                        ARCHE_LOG_WARNING(context->logger(), "Planes are not yet implemented.");
                     }
                     if (ImGui::MenuItem("Light")) {
-                        // Example stub for adding a light
-                        // world->createLight(...);
                         ARCHE_LOG_WARNING(context->logger(), "Lights are not yet implemented.");
                     }
-
 
                     ImGui::EndMenu();
                 }
@@ -391,7 +399,7 @@ namespace Arche {
 
         // Helper: draw camera overlay in top-left of viewport
         void Viewport3DPanel::DrawCameraOverlay(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
-                                                std::shared_ptr<Arche::Scene::Camera> camera) {
+                                                std::shared_ptr<Arche::Render::Camera> camera) {
             // Prepare position text
             glm::dvec3 camPos = camera->GetPosition();
             double pitch = camera->GetPitch();
@@ -484,7 +492,7 @@ namespace Arche {
         void Viewport3DPanel::Draw() {
             ImGui::Begin(name.c_str(), nullptr, ImGuiWindowFlags_None);
 
-            auto camera = context->renderer()->getAttachedCamera();
+            auto camera = context->renderer()->getMainCamera();
 
             // Determine UI scale for high-DPI displays (use framebuffer scale)
             ImGuiIO &io = ImGui::GetIO();

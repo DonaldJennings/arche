@@ -26,7 +26,7 @@ namespace Arche {
             return p;
         }
 
-        void CameraController::attachCamera(std::shared_ptr<Arche::Scene::Camera> cam) noexcept {
+        void CameraController::attachCamera(std::shared_ptr<Arche::Render::Camera> cam) noexcept {
             camera = cam;
             if (camera) {
                 updateCamera();

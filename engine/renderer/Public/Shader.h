@@ -1,4 +1,4 @@
-    #pragma once
+#pragma once
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -16,15 +16,14 @@ namespace Arche {
             };
 
             Shader() = default;
-            Shader(std::string name, Sources sources)
-                : m_name(std::move(name)), m_sources(std::move(sources)) {}
+            Shader(std::string name, Sources sources) : m_name(std::move(name)), m_sources(std::move(sources)) {}
 
-            const std::string& getName() const { return m_name; }
-            const Sources& getSources() const { return m_sources; }
+            const std::string &getName() const { return m_name; }
+            const Sources &getSources() const { return m_sources; }
 
             // Optional defines (name->value) usable by backend before compile
             void setDefine(std::string key, std::string value) { m_defines.emplace(std::move(key), std::move(value)); }
-            const std::unordered_map<std::string, std::string>& getDefines() const { return m_defines; }
+            const std::unordered_map<std::string, std::string> &getDefines() const { return m_defines; }
 
           private:
             std::string m_name;

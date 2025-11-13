@@ -8,7 +8,7 @@
 #include <glm/gtc/type_ptr.hpp>
 
 namespace Arche {
-namespace Scene {
+namespace Render {
 
 // Helper using GLM utilities
 static double DegToRad(double d) { return glm::radians(d); }

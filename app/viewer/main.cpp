@@ -5,6 +5,7 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
+
 #include <imgui.h>
 
 #include <EngineCore.h>
@@ -55,7 +56,7 @@ int main() {
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
 
-        engineCore->initialise(window->get());
+        engineCore->initialise();
 
         engineCore->getWorld()->addEntity(
             std::make_shared<Arche::Scene::SphereEntity>(10.0f, glm::vec3(0.0f, 10.0f, -15.0f)));

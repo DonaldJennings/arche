@@ -2,17 +2,40 @@
 #include <array>
 #include <memory>
 #include <string>
-
-#include <glm/glm.hpp>
+#include <unordered_map>
 
 #include <IRenderBackend.h>
+#include <glad/glad.h>
+#include <glfw/glfw3.h>
 
 struct GLFWwindow;
 
-namespace Arche { namespace Core { class LoggingService; } }
+namespace Arche {
+    namespace Core {
+        class LoggingService;
+    }
+} // namespace Arche
 
 namespace Arche {
     namespace Render {
+
+        struct GLShaderProgram {
+            GLuint programID = 0;
+            std::unordered_map<std::string, GLint> uniformLocations;
+        };
+
+        struct GLMesh {
+            GLuint vertexArrayObject = 0;
+            GLuint vertexBufferObject = 0;
+            GLuint elementBufferObject = 0;
+            GLsizei indexCount = 0;
+            GLsizei vertexCount = 0;
+        };
+
+        struct GLTexture {
+            GLuint textureID = 0;
+        };
+
         class OpenGLBackend : public IRenderBackend {
           public:
             OpenGLBackend();
@@ -24,10 +47,11 @@ namespace Arche {
             void beginFrame() override;
             void endFrame() override;
             void setViewProjection(const glm::mat4 &view, const glm::mat4 &projection) override;
-            void setShader(const std::shared_ptr<Shader> shader) override;
+            void setShader(std::shared_ptr<Shader> shader) override;
             void setMaterial(const Material &material) override;
             void drawMesh(const Mesh &mesh, const glm::mat4 &model) override;
             unsigned int getRenderTextureID() const override { return m_colorTexture; }
+
           private:
             // Backbuffer and cached matrices
             glm::ivec2 m_Backbuffer{800, 600};
@@ -43,10 +67,16 @@ namespace Arche {
             unsigned int m_colorTexture = 0;
             unsigned int m_depthStencilRbo = 0;
 
-            // Minimal point rendering pipeline
-            unsigned int m_pointProgram = 0;
-            unsigned int m_pointVAO = 0;
-            unsigned int m_pointVBO = 0;
+            std::unordered_map<std::string, GLShaderProgram> m_shaders;
+            std::unordered_map<const Mesh *, GLMesh> m_meshes;
+
+            GLShaderProgram *m_currentShader = nullptr;
+
+            // Return references to cache-stored objects (avoid dangling temporaries)
+            GLShaderProgram &getOrCreateShaderProgram(const std::shared_ptr<Shader> &shader);
+            GLMesh &getOrCreateGLMesh(const Mesh &mesh);
+
+            GLint getUniformLocation(GLShaderProgram &program, const std::string &name);
 
             // Cached view/projection for uniform uploads
             float m_viewF[16]{};
@@ -57,7 +87,6 @@ namespace Arche {
 
             // Helpers
             bool initialiseFrameBuffer();
-            bool ensurePointPipeline();
         };
     } // namespace Render
 } // namespace Arche
