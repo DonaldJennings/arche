@@ -57,7 +57,7 @@ namespace Arche {
             void setUniformVec4(const std::string &name, const glm::vec4 &value) override;
             void setUniform1f(const std::string &name, float value) override;
             void setUniformVec3(const std::string &name, const glm::vec3 &value) override;
-
+            void setDepthMask(bool enabled) override;
           private:
             // Backbuffer and cached matrices
             glm::ivec2 m_Backbuffer{800, 600};

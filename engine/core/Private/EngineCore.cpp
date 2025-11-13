@@ -52,7 +52,8 @@ void EngineCore::initialise() {
             camera->setPerspective(60.0f, 16.0f / 9.0f, 0.1f, 1000.0f);
             renderingSystem->setMainCamera(camera);
 
-            // --- Resolve asset directory next to executable ---
+            // --- R
+            // esolve asset directory next to executable ---
             auto exePath = GetExecutablePath();
             auto exeDir = exePath.parent_path();
             std::filesystem::path assetRoot = exeDir / "assets";
@@ -69,6 +70,12 @@ void EngineCore::initialise() {
             shaderLoader.load("shaders/flat/flat.shader");
             shaderLoader.load("shaders/blinn-phong/blinn-phong.shader");
             shaderLoader.load("shaders/pbr/pbr.shader");
+            shaderLoader.load("shaders/sky/sky.shader");
+
+            auto skyBox = std::make_shared<Render::SkyRenderer>(resources);
+            skyBox->setShader(resources.getShader("Sky"));
+            renderingSystem->setSkyRenderer(skyBox);
+
 
             // ======================================================
             // 2. Load Materials (.mat files)

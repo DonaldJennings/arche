@@ -11,6 +11,7 @@
 #include <string_view>
 #include <sstream>
 #include "IRenderTechnique.h"
+#include <SkyRenderer.h>
 
 namespace Arche {
     namespace Render {
@@ -48,6 +49,8 @@ namespace Arche {
 
             void setTechnique(std::unique_ptr<IRenderTechnique> technique) { m_technique = std::move(technique); }
 
+            void setSkyRenderer(std::shared_ptr<SkyRenderer> sky) { m_sky = std::move(sky); }
+
             ResourceRegistry &resources() { return m_resources; }
             const ResourceRegistry &resources() const { return m_resources; }
 
@@ -71,9 +74,21 @@ namespace Arche {
                 glm::mat4 projection = glm::mat4(m_mainCamera->GetProjectionMatrix());
 
                 m_backend->beginFrame();
+                
+                if (m_sky) {
+                    m_sky->render(*m_backend, *m_mainCamera);
+                }
+                else
+                {
+                    ARCHE_LOG_WARNING(m_logger, "No sky renderer set, skipping sky rendering.");
+                }
+
                 m_backend->setViewProjection(view, projection);
 
+                // Draw the skybox
 
+
+                // Draw the Scene
                 auto &technique = *m_technique;
                 auto shader = technique.getShader();
                 m_backend->setShader(shader);
@@ -115,6 +130,7 @@ namespace Arche {
           private:
             std::unique_ptr<IRenderTechnique> m_technique;
             std::unique_ptr<IRenderBackend> m_backend;
+            std::shared_ptr<SkyRenderer> m_sky;
             std::shared_ptr<Core::LoggingService> m_logger;
             std::shared_ptr<Arche::Render::Camera> m_mainCamera;
             ResourceRegistry m_resources;

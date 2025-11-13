@@ -38,6 +38,8 @@ namespace Arche {
             virtual void setUniformVec3(const std::string &name, const glm::vec3 &value) = 0;
             virtual unsigned int getRenderTextureID() const = 0;
 
+            virtual void setDepthMask(bool enabled) = 0;
+
         };
 
     } // namespace Render

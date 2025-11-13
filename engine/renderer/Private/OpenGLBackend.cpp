@@ -410,3 +410,5 @@ void OpenGLBackend::setUniform1f(const std::string &name, float value) {
     if (loc >= 0)
         glUniform1f(loc, value);
 }
+
+void OpenGLBackend::setDepthMask(bool enabled) { glDepthMask(enabled ? GL_TRUE : GL_FALSE); }
