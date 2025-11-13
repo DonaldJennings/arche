@@ -41,7 +41,7 @@ namespace Arche {
 
             std::string_view getMeshId() override { return m_renderable->getMeshName(); };
             std::string_view getMaterialId() override { return m_renderable->getMaterialName(); };
-            std::string_view getShaderId() override { return "flat.color"; };
+            std::string_view getShaderId() override { return m_renderable->getMaterialName(); };
 
             std::string_view getName() const override { return m_name; };
             std::uint64_t getID() const override { return m_id; };

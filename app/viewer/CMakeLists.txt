@@ -18,6 +18,11 @@ target_include_directories(${ARCHE_GUI_VIEWER} PRIVATE
 
 set_target_properties(${ARCHE_GUI_VIEWER} PROPERTIES FOLDER "GUI/Application")
 
+# Run from the executable directory in Visual Studio
+set_target_properties(${ARCHE_GUI_VIEWER} PROPERTIES
+    VS_DEBUGGER_WORKING_DIRECTORY "$<TARGET_FILE_DIR:${ARCHE_GUI_VIEWER}>"
+)
+
 # Copy assets into the target binary directory so runtime can open "assets/..."
 set(ASSETS_SRC_DIR "${CMAKE_SOURCE_DIR}/assets")
 add_custom_command(TARGET ${ARCHE_GUI_VIEWER} POST_BUILD

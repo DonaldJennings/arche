@@ -18,10 +18,6 @@ namespace Arche {
             explicit Material(std::string name) : m_name(std::move(name)) {}
 
             const std::string& getName() const { return m_name; }
-
-            void setShader(std::shared_ptr<Shader> shader) { m_shader = std::move(shader); }
-            const std::shared_ptr<Shader> getShader() const { return m_shader; }
-
             // Common parameters you can extend as needed
             void setBaseColor(const glm::vec4& c) { m_baseColor = c; }
             const glm::vec4& getBaseColor() const { return m_baseColor; }
@@ -37,12 +33,14 @@ namespace Arche {
             void setFloat(std::string name, float v) { m_floats[std::move(name)] = v; }
             const std::unordered_map<std::string, float>& getFloats() const { return m_floats; }
 
+            void setVec3(std::string name, glm::vec3 v) { m_vec3s[std::move(name)] = v; }
+            const std::unordered_map<std::string, glm::vec3>& getVec3s() const { return m_vec3s; }
+
             void setVec4(std::string name, glm::vec4 v) { m_vec4s[std::move(name)] = v; }
             const std::unordered_map<std::string, glm::vec4>& getVec4s() const { return m_vec4s; }
 
           private:
             std::string m_name;
-            std::shared_ptr<Shader> m_shader;
 
             glm::vec4 m_baseColor{0.9f, 0.6f, 0.2f, 1.0f};
             float m_pointSize{6.0f};
@@ -50,6 +48,7 @@ namespace Arche {
             std::unordered_map<std::string, std::string> m_textures;
             std::unordered_map<std::string, float> m_floats;
             std::unordered_map<std::string, glm::vec4> m_vec4s;
+            std::unordered_map<std::string, glm::vec3> m_vec3s;
         };
 
     } // namespace Render

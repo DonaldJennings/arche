@@ -1,0 +1,6 @@
+uBaseColor = 1.0, 0.1, 0.1, 1.0
+uShininess = 64.0
+uAlbedo    = 1.0, 0.766, 0.336
+uMetallic  = 1.0
+uRoughness = 0.3
+uAO        = 1.0

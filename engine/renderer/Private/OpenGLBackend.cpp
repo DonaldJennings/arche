@@ -19,6 +19,7 @@ namespace {
         if (!ok) {
             char log[1024];
             glGetShaderInfoLog(sh, sizeof log, nullptr, log);
+            std::cerr << "[OpenGL] Shader compilation failed:\n" << log << "\n";
             glDeleteShader(sh);
             return 0;
         }
@@ -35,6 +36,7 @@ namespace {
         if (!ok) {
             char log[1024];
             glGetProgramInfoLog(prog, sizeof log, nullptr, log);
+            std::cerr << "[OpenGL] Shader linking failed:\n" << log << "\n";
             glDeleteProgram(prog);
             return 0;
         }
@@ -46,15 +48,37 @@ namespace {
         if (defines.empty())
             return source;
 
-        std::string header;
-        header.reserve(defines.size() * 32); // rough estimate
-
-        for (const auto &[name, value] : defines) {
-            header += "#define " + name + " " + value + "\n";
+        // find the version line
+        size_t pos = source.find("#version");
+        if (pos == std::string::npos) {
+            // no version? prepend everything as fallback
+            std::string header;
+            for (auto &[k, v] : defines)
+                header += "#define " + k + " " + v + "\n";
+            header += "\n";
+            return header + source;
         }
 
-        header += "\n";
-        return header + source;
+        // find end of line after the #version directive
+        size_t lineEnd = source.find('\n', pos);
+        if (lineEnd == std::string::npos)
+            lineEnd = source.size();
+
+        // build new output
+        std::string output;
+        output.reserve(source.size() + defines.size() * 32);
+
+        // copy up to end of version line
+        output = source.substr(0, lineEnd + 1);
+
+        // add defines AFTER the version line
+        for (auto &[k, v] : defines)
+            output += "#define " + k + " " + v + "\n";
+
+        // append rest of shader code
+        output += source.substr(lineEnd + 1);
+
+        return output;
     }
 } // namespace
 
@@ -284,10 +308,6 @@ void OpenGLBackend::setMaterial(const Material &material) {
         return;
     }
 
-    if (auto shader = material.getShader()) {
-        setShader(shader);
-    }
-
     GLint locColor = getUniformLocation(*m_currentShader, "uBaseColor");
     if (locColor >= 0)
         glUniform4fv(locColor, 1, glm::value_ptr(material.getBaseColor()));
@@ -355,4 +375,38 @@ bool OpenGLBackend::initialiseFrameBuffer() {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
     return true;
+}
+
+void OpenGLBackend::setUniformMat4(const std::string &name, const glm::mat4 &value) {
+    if (!m_currentShader || m_currentShader->programID == 0)
+        return;
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0)
+        glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(value));
+}
+
+void OpenGLBackend::setUniformVec4(const std::string &name, const glm::vec4 &value) {
+    if (!m_currentShader || m_currentShader->programID == 0) {
+        return;
+    }
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0) {
+        glUniform4fv(loc, 1, glm::value_ptr(value));
+    }
+}
+
+void OpenGLBackend::setUniformVec3(const std::string &name, const glm::vec3 &value) {
+    if (!m_currentShader || m_currentShader->programID == 0)
+        return;
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0)
+        glUniform3fv(loc, 1, glm::value_ptr(value));
+}
+
+void OpenGLBackend::setUniform1f(const std::string &name, float value) {
+    if (!m_currentShader || m_currentShader->programID == 0)
+        return;
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0)
+        glUniform1f(loc, value);
 }

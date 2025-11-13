@@ -26,9 +26,12 @@ namespace Arche {
                 : loggerService(std::make_shared<LoggingService>()),
                   physicsSystem(std::make_shared<Physics::PhysicsSystem>(loggerService)),
                   timingService(std::make_shared<TimingService>(loggerService)),
-                  worldSystem(std::make_shared<Scene::WorldSystem>(loggerService, timingService)),
-                  renderingSystem(std::make_shared<Render::RenderingSystem>(loggerService, std::make_unique<Arche::Render::OpenGLBackend>())) 
+                  worldSystem(std::make_shared<Scene::WorldSystem>(loggerService, timingService))
             {
+                auto backend = std::make_unique<Arche::Render::OpenGLBackend>();
+                backend->setLogger(loggerService);
+                renderingSystem = std::make_shared<Render::RenderingSystem>(loggerService, std::move(backend));
+
                 registerSubsystem(worldSystem);
             }
 

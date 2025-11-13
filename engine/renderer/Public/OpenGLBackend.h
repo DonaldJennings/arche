@@ -49,8 +49,14 @@ namespace Arche {
             void setViewProjection(const glm::mat4 &view, const glm::mat4 &projection) override;
             void setShader(std::shared_ptr<Shader> shader) override;
             void setMaterial(const Material &material) override;
+            void setLogger(std::shared_ptr<Core::LoggingService> loggerIn) { mLogger = loggerIn; };
             void drawMesh(const Mesh &mesh, const glm::mat4 &model) override;
             unsigned int getRenderTextureID() const override { return m_colorTexture; }
+
+            void setUniformMat4(const std::string &name, const glm::mat4 &value) override;
+            void setUniformVec4(const std::string &name, const glm::vec4 &value) override;
+            void setUniform1f(const std::string &name, float value) override;
+            void setUniformVec3(const std::string &name, const glm::vec3 &value) override;
 
           private:
             // Backbuffer and cached matrices

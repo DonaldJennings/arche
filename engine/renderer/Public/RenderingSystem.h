@@ -10,6 +10,7 @@
 #include <memory>
 #include <string_view>
 #include <sstream>
+#include "IRenderTechnique.h"
 
 namespace Arche {
     namespace Render {
@@ -45,13 +46,24 @@ namespace Arche {
             void setMainCamera(std::shared_ptr<Arche::Render::Camera> camera) { m_mainCamera = std::move(camera); }
             std::shared_ptr<Arche::Render::Camera> getMainCamera() const { return m_mainCamera; }
 
+            void setTechnique(std::unique_ptr<IRenderTechnique> technique) { m_technique = std::move(technique); }
+
             ResourceRegistry &resources() { return m_resources; }
             const ResourceRegistry &resources() const { return m_resources; }
 
             void render(const Scene::WorldSystem &world) {
-                if (!m_backend || !m_mainCamera)
-                {
-                    ARCHE_LOG_ERROR(m_logger, "Rendering backend or main camera not set, cannot render frame.");
+                if (!m_technique) {
+                    ARCHE_LOG_ERROR(m_logger, "No rendering technique set, cannot render frame.");
+                    return;
+                }
+
+                if (!m_backend) {
+                    ARCHE_LOG_ERROR(m_logger, "Rendering backend not set, cannot render frame.");
+                    return;
+                }
+
+                if (!m_mainCamera) {
+                    ARCHE_LOG_ERROR(m_logger, "Main camera not set, cannot render frame.");
                     return;
                 }
 
@@ -61,7 +73,15 @@ namespace Arche {
                 m_backend->beginFrame();
                 m_backend->setViewProjection(view, projection);
 
+
+                auto &technique = *m_technique;
+                auto shader = technique.getShader();
+                m_backend->setShader(shader);
+
+                technique.applyGlobals(*m_backend, *m_mainCamera);
+
                 auto vw = world.view();
+
                 for (const std::shared_ptr<Scene::IEntity> &entity : vw.bodies) {
                     if (!entity) {
                         ARCHE_LOG_WARNING(m_logger, "Skipping null entity while rendering.");
@@ -77,13 +97,11 @@ namespace Arche {
                         continue;
                     }
 
-                    if (auto shader = material->getShader()) {
-                        m_backend->setShader(shader);
-                    }
-                    m_backend->setMaterial(*material);
-
                     glm::mat4 model = glm::translate(glm::mat4(1.0f), entity->getPosition());
                     model = glm::scale(model, entity->getScale());
+                    m_backend->setUniformMat4("uModel", model);
+
+                    technique.applyMaterial(*m_backend, *material);
 
                     m_backend->drawMesh(*mesh, model);
                 }
@@ -95,6 +113,7 @@ namespace Arche {
             unsigned int getRenderTextureID() const { return m_backend ? m_backend->getRenderTextureID() : 0u; }
 
           private:
+            std::unique_ptr<IRenderTechnique> m_technique;
             std::unique_ptr<IRenderBackend> m_backend;
             std::shared_ptr<Core::LoggingService> m_logger;
             std::shared_ptr<Arche::Render::Camera> m_mainCamera;

@@ -32,6 +32,10 @@ namespace Arche {
             virtual void setShader(std::shared_ptr<Arche::Render::Shader> shader) = 0;
             virtual void setMaterial(const Arche::Render::Material &material) = 0;
             virtual void drawMesh(const Arche::Render::Mesh &mesh, const glm::mat4 &model) = 0;
+            virtual void setUniformMat4(const std::string &name, const glm::mat4 &value) = 0;
+            virtual void setUniformVec4(const std::string &name, const glm::vec4 &value) = 0;
+            virtual void setUniform1f(const std::string &name, float value) = 0;
+            virtual void setUniformVec3(const std::string &name, const glm::vec3 &value) = 0;
             virtual unsigned int getRenderTextureID() const = 0;
 
         };
