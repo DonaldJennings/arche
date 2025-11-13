@@ -9,13 +9,12 @@ namespace Arche {
         class SphereEntity : public IEntity {
           public:
             SphereEntity(float radius, glm::vec3 position, bool physicsEnabled = true)
-                : m_radius{radius}, m_position{position}, m_rotation{0.0f, 0.0f, 0.0f}, m_scale(radius) 
-            {
+                : m_radius{radius}, m_position{position}, m_rotation{0.0f, 0.0f, 0.0f}, m_scale(radius) {
                 // Initialize the collider as a sphere collider
-                m_collider = std::make_shared<Physics::SphereCollider>(m_radius, &position);
+                m_collider = std::make_shared<Physics::SphereCollider>(m_radius, &m_position);
                 // If physics is enabled, set up the rigid body
+                m_rigidBody = std::make_shared<Physics::RigidBody>(1.0f);
                 if (physicsEnabled) {
-                    m_rigidBody = std::make_shared<Physics::RigidBody>(1.0f);
                     m_rigidBody->setUseGravity(true);
                 } else {
                     m_rigidBody->setStatic(true); // Make it static if physics is disabled

@@ -37,17 +37,6 @@ int main() {
         // 2. Create EngineCore (manages all services)
         auto engineCore = std::make_shared<Arche::Core::EngineCore>();
 
-        auto cam{std::make_shared<Arche::Scene::Camera>()};
-
-        cam->SetPosition(glm::dvec3(0.0f, 0.0f, 25.0f));
-        cam->setPitchYaw(0.0f, 180.0f);
-        cam->setPerspective(60.0f,
-                            static_cast<double>(engineCore->getRenderer()->getWidth()) /
-                                static_cast<double>(engineCore->getRenderer()->getHeight()),
-                            0.1f, 1000.0f);
-
-        engineCore->getRenderer()->attachCamera(cam);
-
         // 4. Create UIContext and pass references to services and WorldSystem
         auto context = std::make_shared<Arche::GUI::UIContext>(engineCore);
 

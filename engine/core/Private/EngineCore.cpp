@@ -11,7 +11,11 @@ namespace Arche {
 
         void EngineCore::initialise(GLFWwindow *externalWindow) {
             worldSystem->setPhysics(physicsSystem);
-            renderingSystem->initialise(externalWindow);
+            renderingSystem->initialise();
+
+            auto camera{std::make_shared<Scene::Camera>()};
+            camera->setPerspective(60.0, 16.0 / 9.0, 0.1, 1000.0);
+            renderingSystem->setMainCamera(camera);
         }
 
         void EngineCore::update() {
@@ -25,7 +29,7 @@ namespace Arche {
             }
 
             // Render the scene
-            renderingSystem->render(worldSystem->view().bodies);
+            renderingSystem->render(*worldSystem);
         }
 
         void EngineCore::shutdown() {
