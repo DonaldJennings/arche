@@ -3,6 +3,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include <IRenderBackend.h>
 #include <glad/glad.h>
@@ -58,6 +59,10 @@ namespace Arche {
             void setUniform1f(const std::string &name, float value) override;
             void setUniformVec3(const std::string &name, const glm::vec3 &value) override;
             void setDepthMask(bool enabled) override;
+            void setWireframe(bool enabled) override;
+            void beginDebugLines() override;
+            void drawDebugLine(const glm::vec3 &start, const glm::vec3 &end, const glm::vec3 &color) override;
+            void endDebugLines() override;
           private:
             // Backbuffer and cached matrices
             glm::ivec2 m_Backbuffer{800, 600};
@@ -93,6 +98,11 @@ namespace Arche {
 
             // Helpers
             bool initialiseFrameBuffer();
+
+            // Debug line buffered draw state
+            GLuint m_debugLinesVao = 0;
+            GLuint m_debugLinesVbo = 0;
+            std::vector<float> m_debugLinesData; // [x,y,z,r,g,b] per-vertex
         };
     } // namespace Render
 } // namespace Arche

@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 #include "OpenGLBackend.h"
 #include <GLFW/glfw3.h>
@@ -412,3 +413,65 @@ void OpenGLBackend::setUniform1f(const std::string &name, float value) {
 }
 
 void OpenGLBackend::setDepthMask(bool enabled) { glDepthMask(enabled ? GL_TRUE : GL_FALSE); }
+
+void OpenGLBackend::setWireframe(bool enabled) {
+    if (enabled) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    } else {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+}
+
+void OpenGLBackend::beginDebugLines() {
+    m_debugLinesData.clear();
+}
+
+void OpenGLBackend::drawDebugLine(const glm::vec3 &start, const glm::vec3 &end, const glm::vec3 &color) {
+    // two vertices: pos + color
+    m_debugLinesData.reserve(m_debugLinesData.size() + 12);
+    // start
+    m_debugLinesData.push_back(start.x);
+    m_debugLinesData.push_back(start.y);
+    m_debugLinesData.push_back(start.z);
+    m_debugLinesData.push_back(color.r);
+    m_debugLinesData.push_back(color.g);
+    m_debugLinesData.push_back(color.b);
+    // end
+    m_debugLinesData.push_back(end.x);
+    m_debugLinesData.push_back(end.y);
+    m_debugLinesData.push_back(end.z);
+    m_debugLinesData.push_back(color.r);
+    m_debugLinesData.push_back(color.g);
+    m_debugLinesData.push_back(color.b);
+}
+
+void OpenGLBackend::endDebugLines() {
+    if (m_debugLinesData.empty())
+        return;
+
+    if (m_debugLinesVao == 0) {
+        glGenVertexArrays(1, &m_debugLinesVao);
+        glGenBuffers(1, &m_debugLinesVbo);
+
+        glBindVertexArray(m_debugLinesVao);
+        glBindBuffer(GL_ARRAY_BUFFER, m_debugLinesVbo);
+
+        const GLsizei stride = sizeof(float) * 6; // vec3 pos + vec3 color
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
+
+        glBindVertexArray(0);
+    }
+
+    glBindVertexArray(m_debugLinesVao);
+    glBindBuffer(GL_ARRAY_BUFFER, m_debugLinesVbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_debugLinesData.size() * sizeof(float)),
+                 m_debugLinesData.data(), GL_DYNAMIC_DRAW);
+
+    glEnable(GL_DEPTH_TEST);
+    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_debugLinesData.size() / 6));
+
+    glBindVertexArray(0);
+}

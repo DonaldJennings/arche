@@ -1,6 +1,4 @@
-uBaseColor = 0.2, 0.6, 0.9, 1.0
-uPointSize = 8.0
-uShininess = 32.0
+shader = PBR
 uAlbedo    = 0.2, 0.4, 0.9
 uMetallic  = 0.0
 uRoughness = 0.4

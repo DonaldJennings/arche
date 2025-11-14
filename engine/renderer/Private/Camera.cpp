@@ -54,11 +54,13 @@ void Camera::setPerspective(double fovY, double aspectRatio, double nearPlane, d
     RecalculateProjectionMatrix();
 }
 
-glm::dmat4 Camera::GetViewMatrix() const {
+glm::dmat4 Camera::GetViewMatrix() {
+    RecalculateViewMatrix();
     return viewMatrix_;
 }
 
-glm::dmat4 Camera::GetProjectionMatrix() const {
+glm::dmat4 Camera::GetProjectionMatrix() {
+    RecalculateProjectionMatrix();
     return projectionMatrix_;
 }
 

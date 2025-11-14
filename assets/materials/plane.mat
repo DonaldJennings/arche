@@ -1,3 +1,4 @@
+shader = PBR
 uBaseColor = 0.7, 0.7, 0.7, 1.0
 uShininess = 8.0
 uAlbedo    = 0.5, 0.5, 0.5

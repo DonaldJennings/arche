@@ -1,11 +1,11 @@
 #include "EngineCore.h"
 
 #include "MaterialLoader.h"
-#include "ShaderLoader.h"
 #include "MeshGenerator.h"
-#include "FlatTechnique.h"
-#include "BlinnPhongTechnique.h"
-#include "PBRTechnique.h"
+#include "GeometryPass.h"
+#include "SkyPass.h"
+#include "DebugPass.h"
+#include "ShaderLoader.h"
 
 #include <memory> // Ensure this is included for std::shared_ptr
 
@@ -43,12 +43,13 @@ namespace Arche {
             subsystems.emplace_back(std::move(newSubsystem));
         }
 
-void EngineCore::initialise() {
+        void EngineCore::initialise() {
             worldSystem->setPhysics(physicsSystem);
             renderingSystem->initialise();
 
             // --- Setup camera ---
             auto camera = std::make_shared<Render::Camera>();
+            camera->SetPosition({0.0, 2.0, 5.0});
             camera->setPerspective(60.0f, 16.0f / 9.0f, 0.1f, 1000.0f);
             renderingSystem->setMainCamera(camera);
 
@@ -71,11 +72,7 @@ void EngineCore::initialise() {
             shaderLoader.load("shaders/blinn-phong/blinn-phong.shader");
             shaderLoader.load("shaders/pbr/pbr.shader");
             shaderLoader.load("shaders/sky/sky.shader");
-
-            auto skyBox = std::make_shared<Render::SkyRenderer>(resources);
-            skyBox->setShader(resources.getShader("Sky"));
-            renderingSystem->setSkyRenderer(skyBox);
-
+            shaderLoader.load("shaders/debug-lines/debug-lines.shader");
 
             // ======================================================
             // 2. Load Materials (.mat files)
@@ -93,17 +90,10 @@ void EngineCore::initialise() {
             resources.registerMesh(Render::MeshGenerator::makePlane("plane.mesh", 10.0f, 10.0f, 10, 10));
             resources.registerMesh(Render::MeshGenerator::makePointSphere("particle.mesh")); // optional
 
-            auto loadedShader = resources.getShader("PBR");
-
-            if (loadedShader) {
-                ARCHE_LOG_INFO(loggerService, "Successfully loaded shader: {}", loadedShader->getName());
-
-                renderingSystem->setTechnique(std::make_unique<Render::PBRTechnique>(loadedShader));
-            } else {
-                ARCHE_LOG_WARNING(loggerService, "Failed to load BlinnPhong shader.");
-            }
+            renderingSystem->addRenderPass(std::make_shared<Render::SkyPass>());
+            renderingSystem->addRenderPass(std::make_shared<Render::GeometryPass>());
+            renderingSystem->addRenderPass(std::make_shared<Render::DebugPass>());
         }
-
 
         void EngineCore::update() {
 

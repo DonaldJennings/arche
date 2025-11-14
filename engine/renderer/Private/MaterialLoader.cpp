@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <sstream>
 #include <stdexcept>
+#include <LoggingService.h>
 
 namespace Arche::Render {
 
@@ -73,17 +74,46 @@ namespace Arche::Render {
         // Absolute path to .mat file
         auto fullPath = m_assetRoot / relativePath;
 
-        // Read material file into string
+        // Read material text
         std::string text = readFile(fullPath);
 
-        // Parse key/value lines
+        // Parse key/value pairs (unchanged)
         ParsedMaterial parsed = parseMaterialFile(text);
 
-        // Create material object
+        // Material name from filename
         std::string matName = relativePath.filename().string();
+
+        // Create material object
         auto material = std::make_shared<Material>(matName);
 
-for (auto &[key, value] : parsed.values) {
+        // ------------------------------------------------------------
+        // 1. Load SHADER FIRST if provided
+        // ------------------------------------------------------------
+        if (auto it = parsed.values.find("shader"); it != parsed.values.end()) {
+            std::string shaderName = it->second;
+
+            // Attempt to get shader from registry
+            auto shader = m_registry.getShader(shaderName);
+
+            if (!shader) {
+                std::cerr << "MaterialLoader: Warning: Shader '" << shaderName << "' not found for material '"
+                          << matName << "'. Using no shader." << std::endl;
+            } else {
+                material->setShaderName(shaderName);
+            }
+
+            // Remove shader from parsed list so it isn't treated as a uniform
+            parsed.values.erase(it);
+        } else {
+            std::cerr << "MaterialLoader: Warning: No shader specified for material '" << matName
+                      << "'. Using default flat shader." << std::endl;
+            material->setShaderName("flat");
+        }
+
+        // ------------------------------------------------------------
+        // 2. Parse property keys (vec4, vec3, float, texture)
+        // ------------------------------------------------------------
+        for (auto &[key, value] : parsed.values) {
             auto toLower = [](std::string s) {
                 std::transform(s.begin(), s.end(), s.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -93,45 +123,33 @@ for (auto &[key, value] : parsed.values) {
             std::string k = toLower(key);
 
             // ------------------------------------------------------------
-            // Split by commas (vec3 / vec4 detection)
+            // Vec3 / Vec4 detection
             // ------------------------------------------------------------
             size_t c1 = value.find(',');
             if (c1 != std::string::npos) {
-                // Count commas → 1 comma = vec2 (?) or unsupported,
-                //                2 commas = vec3,
-                //                3 commas = vec4.
                 size_t c2 = value.find(',', c1 + 1);
                 size_t c3 = (c2 != std::string::npos) ? value.find(',', c2 + 1) : std::string::npos;
 
-                // -----------------------
                 // vec4
-                // -----------------------
                 if (c3 != std::string::npos) {
                     float r = std::stof(value.substr(0, c1));
                     float g = std::stof(value.substr(c1 + 1, c2 - c1 - 1));
                     float b = std::stof(value.substr(c2 + 1, c3 - c2 - 1));
                     float a = std::stof(value.substr(c3 + 1));
 
-                    glm::vec4 v(r, g, b, a);
-                    material->setVec4(key, v);
+                    material->setVec4(key, glm::vec4(r, g, b, a));
                     continue;
                 }
 
-                // -----------------------
                 // vec3
-                // -----------------------
                 if (c2 != std::string::npos) {
                     float r = std::stof(value.substr(0, c1));
                     float g = std::stof(value.substr(c1 + 1, c2 - c1 - 1));
                     float b = std::stof(value.substr(c2 + 1));
 
-                    glm::vec3 v(r, g, b);
-                    material->setVec3(key, v);
+                    material->setVec3(key, glm::vec3(r, g, b));
                     continue;
                 }
-
-                // If there's only one comma (unlikely in PBR), treat as malformed.
-                // You can add vec2 support here if needed.
             }
 
             // ------------------------------------------------------------
@@ -142,14 +160,18 @@ for (auto &[key, value] : parsed.values) {
                 material->setFloat(key, f);
                 continue;
             } catch (...) {
+                // not a float
             }
 
             // ------------------------------------------------------------
-            // Texture or string fallback
+            // Texture path or string fallback
             // ------------------------------------------------------------
             material->setTexture(key, value);
         }
-        // Register material with ResourceRegistry
+
+        // ------------------------------------------------------------
+        // 3. Register the material
+        // ------------------------------------------------------------
         m_registry.registerMaterial(material);
         return material;
     }

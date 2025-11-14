@@ -61,6 +61,7 @@ public:
         distance = 5.0f;
         yaw = 0.0f;
         pitch = 0.0f;
+
         target = glm::vec3{0.0, 0.0, 0.0};
     }
 
@@ -73,7 +74,7 @@ private:
     float distance{5.0f};   // radius from target
     float yaw{0.0f};        // radians
     float pitch{0.0f};      // radians
-    glm::vec3 position{0.0, 0.0, 5.0}; // cached position (world space)
+    glm::vec3 position{0.0f, 5.0f, 5.0f}; // cache last computed position
 
     // target in world space (panning)
     glm::vec3 target{0.0, 0.0, 0.0};

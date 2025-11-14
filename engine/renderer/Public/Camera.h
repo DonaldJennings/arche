@@ -31,8 +31,8 @@ namespace Arche {
             glm::dvec3 screenToWorldRay(float screenX, float screenY, float viewportWidth, float viewportHeight);
 
             // Keep legacy layout: column-major 4x4 matrix as 16 double values
-            glm::dmat4 GetViewMatrix() const ;
-            glm::dmat4 GetProjectionMatrix() const;
+            glm::dmat4 GetViewMatrix() ;
+            glm::dmat4 GetProjectionMatrix();
 
           private:
             void RecalculateViewMatrix();
