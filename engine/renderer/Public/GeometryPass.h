@@ -21,8 +21,8 @@ namespace Arche {
                 backend.setViewProjection(view.viewMatrix, view.projectionMatrix);
 
                 backend.setUniformVec3("uCameraPos", view.cameraPosition);
-                backend.setUniformVec3("uLightColor", settings.sunColor);
-                backend.setUniformVec3("uLightPos", settings.sunPosition);
+                backend.setUniformVec3("uLightColor", settings.ambientLight);
+                backend.setUniformVec3("uLightPos", settings.ambientPosition);
 
                 // Loop over all opaque entities (later you'll add transparent pass)
                 for (const auto &e : view.opaqueObjects) {

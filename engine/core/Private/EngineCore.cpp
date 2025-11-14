@@ -57,7 +57,7 @@ namespace Arche {
         void EngineCore::initialise() {
             ARCHE_LOG_INFO(loggingService, "Engine Core Initialising...");
 
-            physicsSystem = std::make_shared<Physics::PhysicsSystem>(loggingService);
+            physicsSystem = std::make_shared<Physics::PhysicsSystem>(loggingService, globalSettings);
             physicsSystem->initialise();
 
             worldSystem = std::make_shared<Scene::WorldSystem>(loggingService, timingService);
@@ -85,8 +85,6 @@ namespace Arche {
             timingService->tick();
             double dt = timingService->deltaTime();
 
-            // Update systems
-            physicsSystem->setGravity(globalSettings->getWorldSettings().gravity);
             worldSystem->update(dt);
 
             // Render the world

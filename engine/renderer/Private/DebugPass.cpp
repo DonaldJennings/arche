@@ -13,21 +13,10 @@ void Arche::Render::DebugPass::render(const RenderView &view, IRenderBackend &ba
     }
 
     // ------------------------------------------------------------
-    // Wireframe mode (optional)
-    // ------------------------------------------------------------
-    backend.setWireframe(settings.wireframe);
-
-    // ------------------------------------------------------------
     // Grid
     // ------------------------------------------------------------
     if (settings.showGrid)
         drawGrid(backend, view.cameraPosition, resources);
-
-    // ------------------------------------------------------------
-    // World axes
-    // ------------------------------------------------------------
-    if (settings.showAxes)
-        drawAxes(backend, view.cameraPosition, resources);
 
     // Restore
     backend.setWireframe(false);
@@ -62,21 +51,6 @@ void Arche::Render::DebugPass::drawGrid(IRenderBackend &backend, const glm::vec3
         backend.drawDebugLine(origin + glm::vec3(-halfGridSize, 0.0f, p),
                               origin + glm::vec3(halfGridSize, 0.0f, p), glm::vec3(0.3f));
     }
-
-    backend.endDebugLines();
-}
-
-void Arche::Render::DebugPass::drawAxes(IRenderBackend &backend, const glm::vec3 &cameraPosition,
-                                        ResourceRegistry &resources) {
-    const float axisLength = 5.0f;
-    const glm::vec3 axisColor(0.65f); // subtle mid-grey
-
-    backend.beginDebugLines();
-
-    // X, Y, Z axes fixed at the world origin
-    backend.drawDebugLine(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(axisLength, 0.0f, 0.0f), axisColor);
-    backend.drawDebugLine(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, axisLength, 0.0f), axisColor);
-    backend.drawDebugLine(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, axisLength), axisColor);
 
     backend.endDebugLines();
 }

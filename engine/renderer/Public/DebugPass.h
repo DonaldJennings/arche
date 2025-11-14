@@ -22,7 +22,6 @@ namespace Arche::Render {
 
       private:
         void drawGrid(IRenderBackend &backend, const glm::vec3 &cameraPosition, ResourceRegistry &resources);
-        void drawAxes(IRenderBackend &backend, const glm::vec3 &cameraPosition, ResourceRegistry &resources);
     };
 
 } // namespace Arche::Render

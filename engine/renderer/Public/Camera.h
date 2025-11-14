@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/quaternion.hpp> 
 
 namespace Arche {
     namespace Render {
@@ -23,6 +24,9 @@ namespace Arche {
             double GetYaw() const;
 
             void setPitchYaw(double pitch, double yaw);
+
+            // Returns the camera's orientation as a quaternion
+            glm::dquat GetOrientation() const;
 
             void setPerspective(double fovY, double aspectRatio, double nearPlane, double farPlane);
 
@@ -53,5 +57,5 @@ namespace Arche {
             glm::dmat4 projectionMatrix_{};
         };
 
-    } // namespace Scene
+    } // namespace Render
 } // namespace Arche

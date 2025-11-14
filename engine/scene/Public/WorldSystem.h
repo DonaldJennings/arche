@@ -118,13 +118,6 @@ namespace Arche {
                 }
             }
 
-            std::optional<glm::vec3> getWorldGravity() const {
-                if (m_physicsSystem) {
-                    return m_physicsSystem->getGravity();
-                }
-                return std::nullopt;
-            }
-
             std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysicsSystem() const { return m_physicsSystem; }
 
           private:

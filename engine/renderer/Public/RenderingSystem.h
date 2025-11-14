@@ -84,6 +84,8 @@ namespace Arche {
                 glm::mat4 view = glm::mat4(m_mainCamera->GetViewMatrix());
                 glm::mat4 projection = glm::mat4(m_mainCamera->GetProjectionMatrix());
 
+                m_backend->setWireframe(settings.wireframe);
+
                 m_backend->beginFrame();
 
                 for (std::shared_ptr<IRenderPass> pass : m_passes) {

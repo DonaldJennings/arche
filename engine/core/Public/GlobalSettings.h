@@ -9,8 +9,10 @@ namespace Arche {
             glm::vec4 clearColor{0.1f, 0.12f, 0.15f, 1.0f};
             float fieldOfView{60.0f};
             bool vsync{true};
-            glm::vec3 sunPosition{10.0f, 10.0f, 0.0f};
-            glm::vec3 sunColor{1.0f, 1.0f, 0.9f};
+
+            glm::vec3 ambientLight{0.2f, 0.2f, 0.2f};
+            float ambientStrength{0.5f};
+            glm::vec3 ambientPosition{10.0f, 10.0f, 0.0f};
 
             bool wireframe{false};
             bool showGrid{true};

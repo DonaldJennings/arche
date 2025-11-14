@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include "Viewport3D.h"
+#include "GizmoSystem.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -17,25 +18,16 @@
 #include <string>
 #include <vector>
 
-#include "SphereEntity.h"
-
 #include "CubeEntity.h"
-
 #include "PlaneEntity.h"
+#include "SphereEntity.h"
 
 #include <glm/glm.hpp>
 #include <limits>
+#include <glm/gtc/quaternion.hpp>
 
 namespace {
-    struct EditState {
-        double posX = 0, posY = 0, posZ=0, mass = 1, scale = 1;
-        bool isStatic = false, useGravity = true;
-        std::uint64_t editingId = 0;
-    };
-
     std::optional<std::uint64_t> selectedBodyId;
-    std::optional<EditState> editState;
-    ImVec2 cameraOffset{0.0f, 0.0f};
 
     inline ImVec2 ImVec2Subtract(const ImVec2 &a, const ImVec2 &b) { return ImVec2(a.x - b.x, a.y - b.y); }
 } // namespace
@@ -45,9 +37,7 @@ namespace Arche {
 
         Viewport3DPanel::Viewport3DPanel(std::shared_ptr<Arche::GUI::UIContext> panelContext)
             : name{"3DViewport"}, context(std::move(panelContext)),
-              cameraController{std::make_shared<CameraController>()} {
-            // nothing else for now
-        }
+              cameraController{std::make_shared<CameraController>()}, m_gizmoSystem{std::make_unique<GizmoSystem>()} {}
 
         // Helper: draw background and renderer texture (handles resize & FBO recreate)
         void Viewport3DPanel::DrawBackgroundAndRenderer(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
@@ -78,9 +68,7 @@ namespace Arche {
 
                 if (tex != 0) {
                     drawList->PushClipRect(canvasP0, canvasP1, true);
-                    ImVec2 uv0(0.0f, 1.0f);
-                    ImVec2 uv1(1.0f, 0.0f);
-                    drawList->AddImage((void *)(intptr_t)tex, canvasP0, canvasP1, uv0, uv1);
+                    drawList->AddImage((void *)(intptr_t)tex, canvasP0, canvasP1, {0, 1}, {1, 0});
                     drawList->PopClipRect();
                 }
             }
@@ -88,11 +76,12 @@ namespace Arche {
 
         // Helper: find the nearest body under mouse and prepare edit state if clicked
         void Viewport3DPanel::HandleSelectionAndMarkers(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
-                                                const ImVec2 &canvasSize, const ImVec2 &mousePos,
-                                                bool mouseClicked, const glm::dmat4 &viewMatrix,
-                                                const glm::dmat4 &projectionMatrix, ImDrawList *drawList) {
+                                                        const ImVec2 &canvasSize, const ImVec2 &mousePos,
+                                                        bool mouseClicked, const glm::dmat4 &viewMatrix,
+                                                        const glm::dmat4 &projectionMatrix, ImDrawList *drawList) {
             auto worldSystem = context->worldSystem();
-            if (!worldSystem) return;
+            if (!worldSystem)
+                return;
 
             // Only allow selecting inside the viewport
             const bool hoveringCanvas = ImGui::IsMouseHoveringRect(canvasP0, canvasP1, true);
@@ -104,7 +93,8 @@ namespace Arche {
             std::optional<std::uint64_t> bestBodyId;
 
             for (const auto &body : view.bodies) {
-                if (!body) continue;
+                if (!body)
+                    continue;
 
                 const glm::dvec3 posW = body->getPosition();
                 glm::dvec4 worldPos{posW.x, posW.y, posW.z, 1.0};
@@ -112,28 +102,27 @@ namespace Arche {
                 // View space for depth
                 glm::dvec4 viewPosition4{viewMatrix * worldPos};
                 double viewZ{viewPosition4.z};
-                if (!(viewZ < 0.0)) continue;
+                if (!(viewZ < 0.0))
+                    continue;
 
                 // Clip -> NDC center
                 glm::dvec4 clipC{projectionMatrix * viewPosition4};
-                if (clipC.w == 0.0) continue;
+                if (clipC.w == 0.0)
+                    continue;
                 glm::dvec3 ndcC{glm::dvec3(clipC) / clipC.w};
-                if (ndcC.x < -1.0 || ndcC.x > 1.0 || ndcC.y < -1.0 || ndcC.y > 1.0 || ndcC.z < -1.0 || ndcC.z > 1.0) continue;
+                if (ndcC.x < -1.0 || ndcC.x > 1.0 || ndcC.y < -1.0 || ndcC.y > 1.0 || ndcC.z < -1.0 || ndcC.z > 1.0)
+                    continue;
 
                 // Project a point offset by scale in world X to estimate screen radius
                 glm::dvec3 sxW = posW + glm::dvec3(body->getScale().x, 0.0, 0.0);
                 glm::dvec4 clipE = projectionMatrix * (viewMatrix * glm::dvec4(sxW, 1.0));
-                glm::dvec2 screenC{
-                    canvasP0.x + static_cast<float>(((ndcC.x + 1.0) * 0.5) * canvasSize.x),
-                    canvasP0.y + static_cast<float>(((1.0 - ((ndcC.y + 1.0) * 0.5)) * canvasSize.y))
-                };
+                glm::dvec2 screenC{canvasP0.x + static_cast<float>(((ndcC.x + 1.0) * 0.5) * canvasSize.x),
+                                   canvasP0.y + static_cast<float>(((1.0 - ((ndcC.y + 1.0) * 0.5)) * canvasSize.y))};
                 glm::dvec2 screenE = screenC; // default
                 if (clipE.w != 0.0) {
                     glm::dvec3 ndcE = glm::dvec3(clipE) / clipE.w;
-                    screenE = {
-                        canvasP0.x + static_cast<float>(((ndcE.x + 1.0) * 0.5) * canvasSize.x),
-                        canvasP0.y + static_cast<float>(((1.0 - ((ndcE.y + 1.0) * 0.5)) * canvasSize.y))
-                    };
+                    screenE = {canvasP0.x + static_cast<float>(((ndcE.x + 1.0) * 0.5) * canvasSize.x),
+                               canvasP0.y + static_cast<float>(((1.0 - ((ndcE.y + 1.0) * 0.5)) * canvasSize.y))};
                 }
 
                 // Screen-space radius from projected offset (fallback to 8px minimum)
@@ -152,24 +141,10 @@ namespace Arche {
                 }
             }
 
-            if (hoveringCanvas && mouseClicked && bestBodyId) {
-                auto localSelectedBodyId = bestBodyId.value();
-                auto selectedIt = std::find_if(view.bodies.begin(), view.bodies.end(),
-                    [&](const auto &b) { return b && b->getID() == localSelectedBodyId; });
-
-                if (selectedIt != view.bodies.end() && (*selectedIt)) {
-                    auto &e = *selectedIt;
-                    auto p = e->getPosition();
-                    auto rb = e->getRigidBody();
-
-                    // Safe defaults if there is no rigid body (e.g., planes)
-                    double mass    = rb ? static_cast<double>(rb->getMass()) : 1.0;
-                    bool   isStat  = rb ? rb->isStatic() : false;
-                    bool   useGrav = rb ? rb->isUsingGravity() : false;
-
-                    editState = EditState{p.x, p.y, p.z, mass, e->getScale().x, isStat, useGrav, e->getID()};
-                    selectedBodyId = localSelectedBodyId;
-                    ARCHE_LOG_INFO(context->logger(), "Selected entity id " + std::to_string(e->getID()));
+            if (hoveringCanvas && mouseClicked && !m_gizmoSystem->isDragging()) {
+                selectedBodyId = bestBodyId;
+                if (selectedBodyId) {
+                    ARCHE_LOG_INFO(context->logger(), "Selected entity id " + std::to_string(*selectedBodyId));
                 }
             }
 
@@ -180,7 +155,7 @@ namespace Arche {
         void Viewport3DPanel::HandleCameraInput(const ImVec2 &canvasP0, const ImVec2 &canvasP1,
                                                 const ImVec2 &canvasSize,
                                                 std::shared_ptr<Arche::Render::Camera> camera) {
-            if (!cameraController)
+            if (!cameraController || m_gizmoSystem->isDragging())
                 return;
 
             if (camera != attachedCamera) {
@@ -191,14 +166,6 @@ namespace Arche {
 
             bool hoveringCanvas = ImGui::IsMouseHoveringRect(canvasP0, canvasP1, true);
             bool allowControl = !ImGui::IsAnyItemActive();
-
-            auto worldSystem = context->worldSystem();
-
-            if (ImGui::IsKeyPressed(ImGuiKey_Insert)) {
-                ARCHE_LOG_INFO(context->logger(), "Resetting camera to default position.");
-                cameraController->reset();
-                cameraController->updateCamera();
-            }
 
             if (hoveringCanvas && allowControl) {
                 // Pan / rotate with mouse
@@ -256,10 +223,53 @@ namespace Arche {
                     cameraController->moveLocal(forward, right, up);
                     cameraController->updateCamera();
 
-                    if (context && context->renderer() && worldSystem) {
-                        context->renderer()->render(*worldSystem, context->globalSettings().getRenderSettings());
+                    if (context && context->renderer() && context->worldSystem()) {
+                        context->renderer()->render(*context->worldSystem(),
+                                                    context->globalSettings().getRenderSettings());
                     }
                 }
+            }
+        }
+
+        void Viewport3DPanel::DrawCameraViewGizmo(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
+                                 std::shared_ptr<Arche::Render::Camera> camera, ImDrawList *drawList) {
+            const float gizmoSize = 80.0f;
+            const float margin = 20.0f;
+
+            // Position in top-right corner
+            ImVec2 center =
+                ImVec2(canvasP0.x + canvasSize.x - gizmoSize / 2 - margin, canvasP0.y + gizmoSize / 2 + margin);
+
+            // Get camera's rotation matrix
+            glm::mat3 camRotation = glm::mat3_cast(camera->GetOrientation());
+
+            struct Axis {
+                glm::vec3 direction;
+                const char *label;
+                ImU32 color;
+            };
+
+            Axis axes[] = {{{1, 0, 0}, "X", IM_COL32(255, 0, 0, 255)},
+                           {{0, 1, 0}, "Y", IM_COL32(0, 255, 0, 255)},
+                           {{0, 0, 1}, "Z", IM_COL32(0, 0, 255, 255)}};
+
+            // Draw axes lines and labels
+            for (const auto &axis : axes) {
+                // Transform axis direction by camera rotation
+                glm::vec3 screenDir3 = camRotation * axis.direction;
+                ImVec2 screenDir = ImVec2(screenDir3.x, -screenDir3.y); // Y is inverted in screen space
+
+                // Draw line
+                drawList->AddLine(
+                    center,
+                    ImVec2(center.x + screenDir.x * (gizmoSize / 2.5f), center.y + screenDir.y * (gizmoSize / 2.5f)),
+                    axis.color, 2.0f);
+
+                // Draw label
+                ImVec2 textSize = ImGui::CalcTextSize(axis.label);
+                ImVec2 textPos = ImVec2(center.x + screenDir.x * (gizmoSize / 2.0f) - textSize.x / 2,
+                                        center.y + screenDir.y * (gizmoSize / 2.0f) - textSize.y / 2);
+                drawList->AddText(textPos, IM_COL32(255, 255, 255, 255), axis.label);
             }
         }
 
@@ -323,8 +333,8 @@ namespace Arche {
                         // Horizontal plane at clicked point
                         auto plane = std::make_shared<Scene::PlaneEntity>(glm::vec3(0.0f, 1.0f, 0.0f),
                                                                           static_cast<float>(spawnWorldPos.y));
-                        plane->setPosition(glm::vec3(spawnWorldPos));       // keep X/Z from click
-                        plane->setScale(glm::vec3(10.0f));                  // size in your mesh units
+                        plane->setPosition(glm::vec3(spawnWorldPos)); // keep X/Z from click
+                        plane->setScale(glm::vec3(10.0f));            // size in your mesh units
                         worldSystem->addEntity(plane);
                     }
                     if (ImGui::MenuItem("Light")) {
@@ -334,69 +344,6 @@ namespace Arche {
                     ImGui::EndMenu();
                 }
 
-                ImGui::EndPopup();
-            }
-        }
-
-        // Helper: edit object modal popup
-        void Viewport3DPanel::HandleEditPopup(const ImVec2 &canvasP0, const ImVec2 &canvasSize) {
-            auto worldSystem = context->worldSystem();
-            if (!worldSystem)
-                return;
-
-            auto view = worldSystem->view();
-
-            // Use cbegin/cend and compare against cend(). Avoid calling getID() on shared_ptr directly.
-            auto selectedIt = selectedBodyId ? std::find_if(view.bodies.cbegin(), view.bodies.cend(),
-                                                            [&](const std::shared_ptr<Arche::Scene::IEntity> &e) {
-                                                                return e && e->getID() == *selectedBodyId;
-                                                            })
-                                             : view.bodies.cend();
-
-            if (selectedBodyId && selectedIt != view.bodies.cend()) {
-                ImGui::OpenPopup("EditObjectPopup");
-            }
-
-            if (ImGui::BeginPopupModal("EditObjectPopup", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
-                if (selectedIt != view.bodies.cend() && editState && editState->editingId == (*selectedIt)->getID()) {
-
-                    ImGui::InputDouble("Position X: ", &editState->posX);
-                    ImGui::InputDouble("Position Y: ", &editState->posY);
-                    ImGui::InputDouble("Position Z: ", &editState->posZ); // Z is not editable here
-                    ImGui::InputDouble("Mass: ", &editState->mass);
-                    ImGui::InputDouble("Scale: ", &editState->scale);
-                    ImGui::Checkbox("Static body", &editState->isStatic);
-                    ImGui::Checkbox("Gravity enabled", &editState->useGravity);
-
-
-
-                    if (ImGui::Button("Save")) {
-                        const auto id = (*selectedIt)->getID();
-                        const float currentZ = (*selectedIt)->getPosition().z;
-
-                        worldSystem->updateEntityPosition(id, glm::vec3(editState->posX, editState->posY, editState->posZ));
-                        worldSystem->updateEntityScale(id, glm::vec3(static_cast<float>(editState->scale)));
-
-                        if (auto rb = (*selectedIt)->getRigidBody()) {
-                            worldSystem->updateEntityMass(id, static_cast<float>(editState->mass));
-                            worldSystem->updateEntityStaticState(id, editState->isStatic);
-                            worldSystem->updateEntityImpactedByGravity(id, editState->useGravity);
-                        }
-
-                        ImGui::CloseCurrentPopup();
-                        editState.reset();
-                        selectedBodyId.reset();
-                    }
-                    ImGui::SameLine();
-                    if (ImGui::Button("Cancel")) {
-                        ImGui::CloseCurrentPopup();
-                        editState.reset();
-                        selectedBodyId.reset();
-                    }
-                } else {
-                    ImGui::CloseCurrentPopup();
-                    editState.reset();
-                }
                 ImGui::EndPopup();
             }
         }
@@ -497,15 +444,12 @@ namespace Arche {
             ImGui::Begin(name.c_str(), nullptr, ImGuiWindowFlags_None);
 
             auto camera = context->renderer()->getMainCamera();
+            if (!camera) {
+                ImGui::Text("Main camera not set.");
+                ImGui::End();
+                return;
+            }
 
-            // Determine UI scale for high-DPI displays (use framebuffer scale)
-            ImGuiIO &io = ImGui::GetIO();
-            float dpiScale = io.DisplayFramebufferScale.x;
-            if (!(dpiScale > 0.0f))
-                dpiScale = 1.0f;
-            float uiScale = dpiScale;
-
-            // Access world system
             auto worldSystem = context->worldSystem();
             if (!worldSystem) {
                 ImGui::Text("World system not available.");
@@ -521,7 +465,6 @@ namespace Arche {
             if (canvasSize.y < 50.0f)
                 canvasSize.y = 50.0f;
             ImVec2 canvasP1 = ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y);
-
             ImDrawList *drawList = ImGui::GetWindowDrawList();
 
             // Background + renderer texture
@@ -544,14 +487,32 @@ namespace Arche {
             // Context menu (Add Particle)
             HandleContextMenu(canvasP0, canvasSize, mousePos, camera);
 
-            // Edit popup modal
-            HandleEditPopup(canvasP0, canvasSize);
+            DrawCameraViewGizmo(canvasP0, canvasSize, camera, drawList);
+
+            // Gizmo updates
+            if (selectedBodyId) {
+                auto view = worldSystem->view();
+                auto selectedIt = std::find_if(view.bodies.begin(), view.bodies.end(),
+                                               [&](const auto &b) { return b && b->getID() == *selectedBodyId; });
+
+                if (selectedIt != view.bodies.end()) {
+                    m_gizmoSystem->draw(drawList, camera, canvasP0, canvasSize, (*selectedIt)->getPosition());
+
+                    // Pass both position and scale to the update function
+                    GizmoResult result = m_gizmoSystem->update(camera, canvasP0, canvasSize,
+                                                               (*selectedIt)->getPosition(), (*selectedIt)->getScale());
+
+                    if (result.newPosition) {
+                        worldSystem->updateEntityPosition((*selectedIt)->getID(), *result.newPosition);
+                    }
+                    if (result.newScale) {
+                        worldSystem->updateEntityScale((*selectedIt)->getID(), *result.newScale);
+                    }
+                }
+            }
 
             // --- Camera overlay drawn last so it appears on top of renderer image ---
             DrawCameraOverlay(canvasP0, canvasP1, camera);
-
-            ImGuiIO &io2 = ImGui::GetIO();
-            bool viewportFocused = ImGui::IsWindowFocused();
 
             ImGui::End();
         }
