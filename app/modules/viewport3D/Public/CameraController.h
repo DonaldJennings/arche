@@ -63,6 +63,8 @@ public:
         pitch = 0.0f;
 
         target = glm::vec3{0.0, 0.0, 0.0};
+
+        updateCamera();
     }
 
 private:

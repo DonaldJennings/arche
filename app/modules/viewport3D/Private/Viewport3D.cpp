@@ -514,12 +514,24 @@ namespace Arche {
             // --- Camera overlay drawn last so it appears on top of renderer image ---
             DrawCameraOverlay(canvasP0, canvasP1, camera);
 
+
+            // Reset when Insert key is pressed
+            if (ImGui::IsKeyPressed(ImGuiKey_Insert)) {
+                Reset();
+            }
+
             ImGui::End();
         }
 
         std::string_view Viewport3DPanel::GetName() const { return name; }
 
-        void Viewport3DPanel::Reset() { ARCHE_LOG_WARNING(context->logger(), "Resetting 3D viewport (no-op)"); }
+        void Viewport3DPanel::Reset() { 
+            ARCHE_LOG_WARNING(context->logger(), "Resetting 3D viewport (no-op)");
+            attachedCamera = context->renderer()->getMainCamera();
+            cameraController->detachCamera();
+            cameraController->attachCamera(attachedCamera);
+            cameraController->reset();
+        }
 
     } // namespace GUI
 } // namespace Arche
