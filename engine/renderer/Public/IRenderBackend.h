@@ -40,8 +40,7 @@ namespace Arche {
 
             virtual void bindTexture(const std::string &name, unsigned int textureID, int slot) = 0;
 
-            virtual void initialiseShadowResources(int resolution) = 0;
-            virtual void beginShadowPass(const glm::mat4 &lightViewProj, const glm::mat4& lightProj) = 0;
+            virtual void beginShadowPass() = 0;
             virtual void endShadowPass() = 0;
             virtual unsigned int getShadowMapTextureID() const = 0;
             virtual void drawMeshDepthOnly(const Arche::Render::Mesh &mesh, const glm::mat4 &model) = 0;

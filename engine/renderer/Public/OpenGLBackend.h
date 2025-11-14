@@ -55,8 +55,7 @@ namespace Arche {
             unsigned int getRenderTextureID() const override { return m_colorTexture; }
             void bindTexture(const std::string &name, unsigned int textureID, int slot) override;
 
-            void initialiseShadowResources(int resolution) override;
-            void beginShadowPass(const glm::mat4 &lightViewProj, const glm::mat4 &lightProj) override;
+            void beginShadowPass() override;
             void endShadowPass() override;
             unsigned int getShadowMapTextureID() const override { return m_shadowMapTexture; }
             void drawMeshDepthOnly(const Mesh &mesh, const glm::mat4 &model) override;
@@ -90,7 +89,7 @@ namespace Arche {
             GLuint m_shadowMapTexture = 0;
             int m_shadowMapResolution = 2048;
 
-            GLShaderProgram m_shadowProgram;
+            GLShaderProgram *m_shadowProgram = nullptr;
 
             std::unordered_map<std::string, GLShaderProgram> m_shaders;
             std::unordered_map<const Mesh *, GLMesh> m_meshes;

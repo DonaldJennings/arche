@@ -15,7 +15,7 @@
 namespace Arche::Render {
 
     void Arche::Render::ShadowPass::initialise(IRenderBackend &backend) {
-        backend.initialiseShadowResources(m_resolution);
+        //backend.initialiseShadowResources(m_resolution);
         m_shadowMapID = backend.getShadowMapTextureID();
     }
 
@@ -25,17 +25,20 @@ namespace Arche::Render {
 
         glm::vec3 lightPos = -lightDir * settings.globalSettings.directionalLightDistance;
 
-        float orthoRange = 500.0f;
-        glm::mat4 lightProj{glm::ortho(-orthoRange, orthoRange, -orthoRange, orthoRange, 0.1f, 1000.0f)};
+        float orthoRange = 100.0f;
+        glm::mat4 lightProj{glm::ortho(-orthoRange, orthoRange, -orthoRange, orthoRange, 1.0f, 200.0f)};
         glm::mat4 lightView{glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f))};
 
         m_lightSpaceMatrix = lightProj * lightView;
 
-        backend.beginShadowPass(lightView, lightProj);
+        backend.beginShadowPass();
 
         for (const auto &entity : view.opaqueObjects) {
             if (!entity)
                 continue;
+
+            auto depthShader = resources.getShader("ShadowDepth");
+            backend.setShader(depthShader);
 
             glm::mat4 model{glm::translate(glm::mat4(1.0f), entity->getPosition())};
             model = glm::scale(model, entity->getScale());
@@ -45,6 +48,9 @@ namespace Arche::Render {
             if (!mesh) {
                 continue;
             }
+
+            backend.setUniformMat4("uLightSpaceMatrix", m_lightSpaceMatrix);
+            backend.setUniformMat4("uModel", model);
 
             backend.drawMeshDepthOnly(*mesh, model);
         }

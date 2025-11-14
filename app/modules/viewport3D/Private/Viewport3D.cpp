@@ -514,7 +514,6 @@ namespace Arche {
             // --- Camera overlay drawn last so it appears on top of renderer image ---
             DrawCameraOverlay(canvasP0, canvasP1, camera);
 
-
             // Reset when Insert key is pressed
             if (ImGui::IsKeyPressed(ImGuiKey_Insert)) {
                 Reset();
