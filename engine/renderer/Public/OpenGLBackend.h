@@ -55,6 +55,7 @@ namespace Arche {
             unsigned int getRenderTextureID() const override { return m_colorTexture; }
             void bindTexture(const std::string &name, unsigned int textureID, int slot) override;
 
+            void initialiseShadowResources(int resolution) override;
             void beginShadowPass() override;
             void endShadowPass() override;
             unsigned int getShadowMapTextureID() const override { return m_shadowMapTexture; }
@@ -63,6 +64,7 @@ namespace Arche {
             void setUniformMat4(const std::string &name, const glm::mat4 &value) override;
             void setUniformVec4(const std::string &name, const glm::vec4 &value) override;
             void setUniform1f(const std::string &name, float value) override;
+            void setUniform1i(const std::string &name, int value) override;
             void setUniformVec3(const std::string &name, const glm::vec3 &value) override;
             void setDepthMask(bool enabled) override;
             void setWireframe(bool enabled) override;

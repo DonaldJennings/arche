@@ -68,6 +68,8 @@ namespace Arche {
                 backend.setUniformVec3("uLightColor", settings.globalSettings.directionalLightColor); // unit intensity
 
                 // Shadows
+                backend.setUniform1i("uHasShadowMap", settings.shadowSettings.enabled ? 1 : 0);
+
                 if (settings.shadowSettings.enabled) {
                     backend.setUniformMat4("uLightSpaceMatrix", settings.shadowSettings.lightSpaceMatrix);
                     // Bind depth texture to a stable unit; the backend should set uShadowMap to this unit internally.
