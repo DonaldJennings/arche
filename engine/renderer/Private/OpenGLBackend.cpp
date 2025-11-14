@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <iostream>
 #include <vector>
 
 #include "OpenGLBackend.h"
@@ -146,6 +147,8 @@ void OpenGLBackend::initialise() {
     // Create FBO and color/depth attachments
     initialiseFrameBuffer();
 
+    initialiseShadowResources(m_shadowMapResolution);
+
     // Default cached matrices: identity
     for (int i = 0; i < 16; ++i) {
         m_viewF[i] = (i % 5 == 0) ? 1.0f : 0.0f;
@@ -166,6 +169,16 @@ void OpenGLBackend::shutdown() noexcept {
     if (m_frameBuffer) {
         glDeleteFramebuffers(1, &m_frameBuffer);
         m_frameBuffer = 0;
+    }
+
+    if (m_shadowMapTexture) {
+        glDeleteTextures(1, &m_shadowMapTexture);
+        m_shadowMapTexture = 0;
+    }
+
+    if (m_shadowFrameBuffer) {
+        glDeleteFramebuffers(1, &m_shadowFrameBuffer);
+        m_shadowFrameBuffer = 0;
     }
 
     // Mesh resources
@@ -344,6 +357,9 @@ void OpenGLBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
 
 
 void OpenGLBackend::beginShadowPass() {
+    if (m_shadowFrameBuffer == 0)
+        return;
+
     glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFrameBuffer);
     glViewport(0, 0, m_shadowMapResolution, m_shadowMapResolution);
     glClear(GL_DEPTH_BUFFER_BIT);
@@ -353,6 +369,49 @@ void OpenGLBackend::endShadowPass() {
     glBindFramebuffer(GL_FRAMEBUFFER, m_frameBuffer);
     glViewport(0, 0, m_Backbuffer.x, m_Backbuffer.y);
     glUseProgram(0);
+}
+
+void OpenGLBackend::initialiseShadowResources(int resolution) {
+    if (resolution <= 0)
+        resolution = 1024;
+
+    if (m_shadowMapTexture) {
+        glDeleteTextures(1, &m_shadowMapTexture);
+        m_shadowMapTexture = 0;
+    }
+
+    if (m_shadowFrameBuffer) {
+        glDeleteFramebuffers(1, &m_shadowFrameBuffer);
+        m_shadowFrameBuffer = 0;
+    }
+
+    m_shadowMapResolution = resolution;
+
+    glGenFramebuffers(1, &m_shadowFrameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFrameBuffer);
+
+    glGenTextures(1, &m_shadowMapTexture);
+    glBindTexture(GL_TEXTURE_2D, m_shadowMapTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, m_shadowMapResolution, m_shadowMapResolution, 0,
+                 GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    const float borderColor[4] = {1.0f, 1.0f, 1.0f, 1.0f};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_shadowMapTexture, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE) {
+        std::cerr << "[OpenGL] Shadow framebuffer incomplete: 0x" << std::hex << status << std::dec << "\n";
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 void OpenGLBackend::drawMeshDepthOnly(const Mesh &mesh, const glm::mat4 &model) {
@@ -447,6 +506,14 @@ void OpenGLBackend::setUniform1f(const std::string &name, float value) {
     GLint loc = getUniformLocation(*m_currentShader, name);
     if (loc >= 0)
         glUniform1f(loc, value);
+}
+
+void OpenGLBackend::setUniform1i(const std::string &name, int value) {
+    if (!m_currentShader || m_currentShader->programID == 0)
+        return;
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0)
+        glUniform1i(loc, value);
 }
 
 void OpenGLBackend::setDepthMask(bool enabled) { glDepthMask(enabled ? GL_TRUE : GL_FALSE); }

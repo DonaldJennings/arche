@@ -35,10 +35,13 @@ namespace Arche {
             virtual void setUniformMat4(const std::string &name, const glm::mat4 &value) = 0;
             virtual void setUniformVec4(const std::string &name, const glm::vec4 &value) = 0;
             virtual void setUniform1f(const std::string &name, float value) = 0;
+            virtual void setUniform1i(const std::string &name, int value) = 0;
             virtual void setUniformVec3(const std::string &name, const glm::vec3 &value) = 0;
             virtual unsigned int getRenderTextureID() const = 0;
 
             virtual void bindTexture(const std::string &name, unsigned int textureID, int slot) = 0;
+
+            virtual void initialiseShadowResources(int resolution) = 0;
 
             virtual void beginShadowPass() = 0;
             virtual void endShadowPass() = 0;
