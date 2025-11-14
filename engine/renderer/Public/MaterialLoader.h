@@ -16,6 +16,15 @@ namespace Arche::Render {
 
         // Load a material relative to the asset root
         std::shared_ptr<Material> load(const std::filesystem::path &relativePath);
+        
+        void loadAllInDirectory() {
+            // Iterate over all folders and in each folder call load on each .shader file
+            for (const auto &entry : std::filesystem::recursive_directory_iterator(m_assetRoot)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".mat") {
+                    load(entry.path());
+                }
+            }
+        }
 
       private:
         ResourceRegistry &m_registry;

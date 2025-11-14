@@ -8,6 +8,7 @@
 #include "Material.h"
 #include "Mesh.h"
 #include "ResourceRegistry.h"
+#include "GlobalSettings.h"
 #include "Shader.h"
 
 namespace Arche::Render {
@@ -19,7 +20,7 @@ namespace Arche::Render {
         void initialise(IRenderBackend &backend) override;
 
         void render(const RenderView &view, IRenderBackend &backend, const Camera &camera, ResourceRegistry &resources,
-                    const RenderPassSettings &settings) override;
+                    const Core::RenderSettings &settings) override;
 
         void shutdown(IRenderBackend &backend) override;
 

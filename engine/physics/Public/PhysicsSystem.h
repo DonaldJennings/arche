@@ -31,6 +31,7 @@ namespace Arche {
             inline void reset() { m_bodies.clear(); }
 
             inline glm::vec3 getGravity() const { return m_gravity; }
+            void setGravity(const glm::vec3 &gravity) { m_gravity = gravity; }
 
             inline void addBody(const PhysicsBody &body) { m_bodies.push_back(body); }
 

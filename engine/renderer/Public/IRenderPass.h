@@ -5,6 +5,7 @@
 #include "Shader.h"
 #include "IRenderBackend.h"
 #include "ResourceRegistry.h"
+#include "GlobalSettings.h"
 #include <WorldSystem.h>
 
 namespace Arche {
@@ -55,7 +56,7 @@ namespace Arche {
             virtual ~IRenderPass() = default;
             virtual void initialise(IRenderBackend &backend) = 0;
             virtual void render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                                ResourceRegistry &resources, const RenderPassSettings &settings) = 0;
+                                ResourceRegistry &resources, const Core::RenderSettings &settings) = 0;
             virtual void shutdown(IRenderBackend &backend) = 0;
         };
 

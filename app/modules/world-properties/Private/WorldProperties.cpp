@@ -24,6 +24,7 @@ namespace Arche {
             // Existing world info
             if (context && context->worldSystem()) {
                 auto world = context->worldSystem();
+
                 auto view{world->view()};
 
                 ImGui::SeparatorText("Physics Properties");

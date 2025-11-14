@@ -44,6 +44,16 @@ namespace Arche {
              */
             std::shared_ptr<Shader> load(const std::filesystem::path &path);
 
+            void loadAllInDirectory()
+            {
+                // Iterate over all folders and in each folder call load on each .shader file
+                for (const auto &entry : std::filesystem::recursive_directory_iterator(m_assetRoot)) {
+                    if (entry.is_regular_file() && entry.path().extension() == ".shader") {
+                        load(entry.path());
+                    }
+                }
+            }
+
           private:
             /**
              * @brief Read the contents of a file into a string.

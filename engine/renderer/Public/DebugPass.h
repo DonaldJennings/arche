@@ -17,7 +17,7 @@ namespace Arche::Render {
         DebugPass() = default;
         void initialise(IRenderBackend &backend) override {}; // Not implemented
         void render(const RenderView &view, IRenderBackend &backend, const Camera &camera, ResourceRegistry &resources,
-                    const RenderPassSettings &settings) override;
+                    const Core::RenderSettings &settings) override;
         void shutdown(IRenderBackend &backend) override {}; // Not implemented
 
       private:

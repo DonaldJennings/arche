@@ -1,7 +1,7 @@
 #include "DebugPass.h"
 
 void Arche::Render::DebugPass::render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                                      ResourceRegistry &resources, const RenderPassSettings &settings) {
+                                      ResourceRegistry &resources, const Core::RenderSettings &settings) {
 
     // Bind the dedicated debug line shader
     if (auto debugShader = resources.getShader("DebugLines")) {

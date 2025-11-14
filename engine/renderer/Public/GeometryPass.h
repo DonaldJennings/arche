@@ -15,7 +15,7 @@ namespace Arche {
             }
 
             void render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                        ResourceRegistry &resources, const RenderPassSettings &settings) override {
+                        ResourceRegistry &resources, const Core::RenderSettings &settings) override {
 
                 // Apply camera matrices globally
                 backend.setViewProjection(view.viewMatrix, view.projectionMatrix);

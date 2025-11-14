@@ -1,120 +1,110 @@
 #include "EngineCore.h"
-
-#include "MaterialLoader.h"
-#include "MeshGenerator.h"
-#include "GeometryPass.h"
-#include "SkyPass.h"
-#include "DebugPass.h"
+#include "WorldSystem.h"
+#include "RenderingSystem.h"
+#include "PhysicsSystem.h"
+#include "OpenGLBackend.h"
 #include "ShaderLoader.h"
+#include "MaterialLoader.h"
+#include "ResourceRegistry.h"
+#include "SkyPass.h"
+#include "GeometryPass.h"
+#include "DebugPass.h"
 
-#include <memory> // Ensure this is included for std::shared_ptr
-
-#include <glm/common.hpp>
-#include <glm/glm.hpp>
+#include <filesystem>
 
 #ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
+#else
+#include <unistd.h>
 #endif
 
 namespace {
-
-    std::filesystem::path GetExecutablePath() {
-#if defined(_WIN32)
-        wchar_t buffer[MAX_PATH];
-        GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-        return std::filesystem::path(buffer);
-#elif defined(__APPLE__)
-        char buffer[1024];
-        uint32_t size = sizeof(buffer);
-        _NSGetExecutablePath(buffer, &size);
-        return std::filesystem::canonical(buffer);
-#else // Linux
-        char buffer[1024];
-        ssize_t len = readlink("/proc/self/exe", buffer, sizeof(buffer) - 1);
-        buffer[len] = '\0';
-        return std::filesystem::canonical(buffer);
+    // Returns the directory containing the application executable.
+    std::filesystem::path GetExecutableDir() {
+#ifdef _WIN32
+        wchar_t buf[MAX_PATH];
+        DWORD len = GetModuleFileNameW(NULL, buf, MAX_PATH);
+        if (len == 0)
+            return std::filesystem::current_path();
+        return std::filesystem::path(buf).parent_path();
+#else
+        char buf[4096];
+        ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+        if (len != -1) {
+            buf[len] = 0;
+            return std::filesystem::path(buf).parent_path();
+        }
+        return std::filesystem::current_path();
 #endif
     }
-} // namespace
+}
 
 namespace Arche {
     namespace Core {
-        void EngineCore::registerSubsystem(std::shared_ptr<ISubsystem> newSubsystem) {
-            subsystems.emplace_back(std::move(newSubsystem));
+
+        EngineCore::EngineCore() {
+            loggingService = std::make_shared<LoggingService>();
+            timingService = std::make_shared<TimingService>(loggingService);
+            globalSettings = std::make_shared<GlobalSettings>();
+            assetsPath = (GetExecutableDir() / "assets").string();
         }
 
+        EngineCore::~EngineCore() {}
+
         void EngineCore::initialise() {
+            ARCHE_LOG_INFO(loggingService, "Engine Core Initialising...");
+
+            physicsSystem = std::make_shared<Physics::PhysicsSystem>(loggingService);
+            physicsSystem->initialise();
+
+            worldSystem = std::make_shared<Scene::WorldSystem>(loggingService, timingService);
             worldSystem->setPhysics(physicsSystem);
-            renderingSystem->initialise();
+            worldSystem->initialise();
 
-            // --- Setup camera ---
-            auto camera = std::make_shared<Render::Camera>();
-            camera->SetPosition({0.0, 2.0, 5.0});
-            camera->setPerspective(60.0f, 16.0f / 9.0f, 0.1f, 1000.0f);
-            renderingSystem->setMainCamera(camera);
+            auto backend = std::make_unique<Render::OpenGLBackend>();
+            renderingSystem = std::make_shared<Render::RenderingSystem>(loggingService, std::move(backend));
+            
+            // Initialize loaders
+            shaderLoader = std::make_shared<Render::ShaderLoader>(renderingSystem->resources(), assetsPath / "shaders");
+            materialLoader = std::make_shared<Render::MaterialLoader>(renderingSystem->resources(), assetsPath / "materials");            
 
-            // --- R
-            // esolve asset directory next to executable ---
-            auto exePath = GetExecutablePath();
-            auto exeDir = exePath.parent_path();
-            std::filesystem::path assetRoot = exeDir / "assets";
-
-            auto &resources = renderingSystem->resources();
-
-            // --- Loaders ---
-            Render::ShaderLoader shaderLoader(resources, assetRoot);
-            Render::MaterialLoader materialLoader(resources, assetRoot);
-
-            // ======================================================
-            // 1. Load Shader Techniques
-            // ======================================================
-            shaderLoader.load("shaders/flat/flat.shader");
-            shaderLoader.load("shaders/blinn-phong/blinn-phong.shader");
-            shaderLoader.load("shaders/pbr/pbr.shader");
-            shaderLoader.load("shaders/sky/sky.shader");
-            shaderLoader.load("shaders/debug-lines/debug-lines.shader");
-
-            // ======================================================
-            // 2. Load Materials (.mat files)
-            // ======================================================
-            materialLoader.load("materials/cube.mat");
-            materialLoader.load("materials/uv_sphere.mat");
-            materialLoader.load("materials/plane.mat");
-            materialLoader.load("materials/particle.mat");
-
-            // ======================================================
-            // 3. Register Procedural Meshes (from MeshGenerator)
-            // ======================================================
-            resources.registerMesh(Render::MeshGenerator::makeUvSphere("uv_sphere.mesh", 1.0f, 32, 16));
-            resources.registerMesh(Render::MeshGenerator::makeCube("cube.mesh", 1.0f));
-            resources.registerMesh(Render::MeshGenerator::makePlane("plane.mesh", 10.0f, 10.0f, 10, 10));
-            resources.registerMesh(Render::MeshGenerator::makePointSphere("particle.mesh")); // optional
+            renderingSystem->initialise(shaderLoader, materialLoader);
 
             renderingSystem->addRenderPass(std::make_shared<Render::SkyPass>());
             renderingSystem->addRenderPass(std::make_shared<Render::GeometryPass>());
             renderingSystem->addRenderPass(std::make_shared<Render::DebugPass>());
+
+            ARCHE_LOG_INFO(loggingService, "Engine Core Initialised.");
+            timingService->tick(); // Initial tick to set start time
         }
 
-        void EngineCore::update() {
-
-            // Update timing
+        void EngineCore::tick() {
             timingService->tick();
+            double dt = timingService->deltaTime();
 
-            // Update all subsystems
-            for (const std::shared_ptr<ISubsystem> &subsystem : subsystems) {
-                subsystem->update(timingService->deltaTime());
+            // Update systems
+            physicsSystem->setGravity(globalSettings->getWorldSettings().gravity);
+            worldSystem->update(dt);
+
+            // Render the world
+            if (renderingSystem) {
+                renderingSystem->render(*worldSystem, globalSettings->getRenderSettings());
             }
-
-            // Render the scene
-            renderingSystem->render(*worldSystem);
         }
 
         void EngineCore::shutdown() {
-            for (const std::shared_ptr<ISubsystem> &subsystem : subsystems) {
-                subsystem->shutdown();
-            }
-
-            renderingSystem->shutdown();
+            ARCHE_LOG_INFO(loggingService, "Engine Core Shutting Down...");
+            if (renderingSystem)
+                renderingSystem->shutdown();
+            if (worldSystem)
+                worldSystem->shutdown();
+            if (physicsSystem)
+                physicsSystem->shutdown();
+            ARCHE_LOG_INFO(loggingService, "Engine Core Shutdown Complete.");
         }
+
     } // namespace Core
 } // namespace Arche

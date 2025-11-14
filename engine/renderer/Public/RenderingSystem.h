@@ -5,8 +5,11 @@
 #include "LoggingService.h"
 #include "ResourceRegistry.h"
 #include "WorldSystem.h"
+#include "ShaderLoader.h"
+#include "MaterialLoader.h"
 
 #include "IRenderPass.h"
+#include "MeshGenerator.h"
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <sstream>
@@ -20,7 +23,18 @@ namespace Arche {
                             glm::ivec2 backBufferSize = {800, 600}, bool vsync = true)
                 : m_logger(logger), m_backend(std::move(backend)), m_backBufferSize(backBufferSize), m_vsync(vsync) {}
 
-            void initialise() {
+            void initialise(std::shared_ptr<ShaderLoader> shaderLoader, std::shared_ptr<MaterialLoader> materialLoader) {
+
+                shaderLoader->loadAllInDirectory();
+                materialLoader->loadAllInDirectory();
+
+                m_resources.registerMesh(MeshGenerator::makeUvSphere("uv_sphere.mesh", 1.0f, 32, 32));
+                m_resources.registerMesh(MeshGenerator::makeCube("cube.mesh", 1.0f));
+                m_resources.registerMesh(MeshGenerator::makePlane("plane.mesh", 10.0f, 10.0f, 10, 10));
+                m_resources.registerMesh(MeshGenerator::makePointSphere("point_sphere.mesh"));
+
+                // Load shaders, materials, meshes here if needed
+
                 if (m_backend) {
                     m_backend->initialise();
                     m_backend->resize(m_backBufferSize);
@@ -56,7 +70,7 @@ namespace Arche {
             ResourceRegistry &resources() { return m_resources; }
             const ResourceRegistry &resources() const { return m_resources; }
 
-            void render(const Scene::WorldSystem &world) {
+            void render(const Scene::WorldSystem &world, const Core::RenderSettings& settings) {
                 if (!m_backend) {
                     ARCHE_LOG_ERROR(m_logger, "Rendering backend not set, cannot render frame.");
                     return;
@@ -86,7 +100,6 @@ namespace Arche {
                         viewData.opaqueObjects.push_back(entity);
                     }
 
-                    RenderPassSettings settings;
                     pass->render(viewData, *m_backend, *m_mainCamera, m_resources, settings);
                 }
                 m_backend->endFrame();
