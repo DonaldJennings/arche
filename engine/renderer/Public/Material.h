@@ -29,6 +29,9 @@ namespace Arche {
             void setTexture(std::string slot, std::string textureName) { m_textures[std::move(slot)] = std::move(textureName); }
             const std::unordered_map<std::string, std::string>& getTextures() const { return m_textures; }
 
+            void setShaderName(std::string shaderName) { m_shaderName = std::move(shaderName); }
+            const std::string &getShaderName() const { return m_shaderName; }
+
             // Arbitrary float/vec params
             void setFloat(std::string name, float v) { m_floats[std::move(name)] = v; }
             const std::unordered_map<std::string, float>& getFloats() const { return m_floats; }
@@ -41,6 +44,7 @@ namespace Arche {
 
           private:
             std::string m_name;
+            std::string m_shaderName;
 
             glm::vec4 m_baseColor{0.9f, 0.6f, 0.2f, 1.0f};
             float m_pointSize{6.0f};

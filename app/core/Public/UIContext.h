@@ -1,9 +1,9 @@
 #pragma once
 
-#include <RenderingSystem.h>
-#include <LoggingService.h>
-#include <WorldSystem.h>
 #include <EngineCore.h>
+#include <LoggingService.h>
+#include <RenderingSystem.h>
+#include <WorldSystem.h>
 
 namespace Arche {
     namespace GUI {
@@ -15,28 +15,26 @@ namespace Arche {
           public:
             UIContext(std::shared_ptr<Arche::Core::EngineCore> engineIn) : engineCore{engineIn} {};
 
-            std::shared_ptr<Arche::Core::LoggingService> logger() const { return engineCore->getLoggingService(); }
+            std::shared_ptr<Arche::Core::LoggingService> logger() const { return engineCore->getLogger(); }
 
             std::shared_ptr<Arche::Render::RenderingSystem> renderer() const { return engineCore->getRenderer(); }
 
             std::shared_ptr<Arche::Scene::WorldSystem> worldSystem() const { return engineCore->getWorld(); }
 
-            void pauseSimulation() {
-                engineCore->getTimingService()->pause();
-            };
-            void runSimulation() {
-                engineCore->getTimingService()->resume();
-            };
-            bool simulationIsPaused() const { return engineCore->getTimingService()->isPaused(); };
+            void pauseSimulation() { engineCore->getTimer()->pause(); };
+            void runSimulation() { engineCore->getTimer()->resume(); };
+            bool simulationIsPaused() const { return engineCore->getTimer()->isPaused(); };
 
             void toggleSimulationState() {
-                
+
                 if (simulationIsPaused()) {
-                    engineCore->getTimingService()->resume();
+                    engineCore->getTimer()->resume();
                 } else {
-                    engineCore->getTimingService()->pause();
+                    engineCore->getTimer()->pause();
                 }
             };
+
+            Core::GlobalSettings &globalSettings() const { return engineCore->getGlobalSettings(); };
         };
     } // namespace GUI
 } // namespace Arche

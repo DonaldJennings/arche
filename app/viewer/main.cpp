@@ -13,6 +13,7 @@
 #include <TimingService.h>
 #include <UIContext.h>
 #include <WorldSystem.h>
+#include <Camera.h> // Include the Camera header
 
 #include <DockspacePanel.h>
 #include <GUILogSink.h>
@@ -38,6 +39,15 @@ int main() {
         // 2. Create EngineCore (manages all services)
         auto engineCore = std::make_shared<Arche::Core::EngineCore>();
 
+        // 3. Initialize engine systems
+        engineCore->initialise();
+
+        // Create and set the main camera
+        auto mainCamera = std::make_shared<Arche::Render::Camera>();
+        mainCamera->setPerspective(60.0, 1920.0 / 1080.0, 0.1, 1000.0);
+        mainCamera->SetPosition({0.0, 5.0, 20.0});
+        engineCore->getRenderer()->setMainCamera(mainCamera);
+
         // 4. Create UIContext and pass references to services and WorldSystem
         auto context = std::make_shared<Arche::GUI::UIContext>(engineCore);
 
@@ -45,7 +55,7 @@ int main() {
         Arche::GUI::PanelRegistry panels;
         auto guiLogger = std::make_unique<Arche::GUI::GUILogSink>();
         auto *guiLoggerPtr = guiLogger.get();
-        context->logger()->addSink(std::move(guiLogger));
+        engineCore->getLogger()->addSink(std::move(guiLogger));
 
         panels.RegisterPanel(std::make_shared<Arche::GUI::DockspacePanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::LogPanel>(guiLoggerPtr));
@@ -56,18 +66,21 @@ int main() {
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
 
-        engineCore->initialise();
-
         engineCore->getWorld()->addEntity(
             std::make_shared<Arche::Scene::SphereEntity>(2.50f, glm::vec3(0.0f, 10.0f, -15.0f)));
 
-        engineCore->getTimingService()->pause();
+        engineCore->getTimer()->pause();
+        
         // 6. Main loop
         while (!glfwWindowShouldClose(*window)) {
-            engineCore->update();
-
             glfwPollEvents();
+
+            // Tick the engine systems
+            engineCore->tick();
+
+            // Render the GUI
             guiRunner.frame();
+
             glfwSwapBuffers(*window);
         }
 

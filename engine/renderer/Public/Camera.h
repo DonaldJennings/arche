@@ -4,6 +4,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/quaternion.hpp> 
 
 namespace Arche {
     namespace Render {
@@ -24,6 +25,9 @@ namespace Arche {
 
             void setPitchYaw(double pitch, double yaw);
 
+            // Returns the camera's orientation as a quaternion
+            glm::dquat GetOrientation() const;
+
             void setPerspective(double fovY, double aspectRatio, double nearPlane, double farPlane);
 
             // Returns a world-space ray direction (normalized) for the given screen coords.
@@ -31,8 +35,8 @@ namespace Arche {
             glm::dvec3 screenToWorldRay(float screenX, float screenY, float viewportWidth, float viewportHeight);
 
             // Keep legacy layout: column-major 4x4 matrix as 16 double values
-            glm::dmat4 GetViewMatrix() const ;
-            glm::dmat4 GetProjectionMatrix() const;
+            glm::dmat4 GetViewMatrix() ;
+            glm::dmat4 GetProjectionMatrix();
 
           private:
             void RecalculateViewMatrix();
@@ -53,5 +57,5 @@ namespace Arche {
             glm::dmat4 projectionMatrix_{};
         };
 
-    } // namespace Scene
+    } // namespace Render
 } // namespace Arche

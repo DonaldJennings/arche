@@ -38,8 +38,18 @@ namespace Arche {
             virtual void setUniformVec3(const std::string &name, const glm::vec3 &value) = 0;
             virtual unsigned int getRenderTextureID() const = 0;
 
-            virtual void setDepthMask(bool enabled) = 0;
+            virtual void bindTexture(const std::string &name, unsigned int textureID, int slot) = 0;
 
+            virtual void beginShadowPass() = 0;
+            virtual void endShadowPass() = 0;
+            virtual unsigned int getShadowMapTextureID() const = 0;
+            virtual void drawMeshDepthOnly(const Arche::Render::Mesh &mesh, const glm::mat4 &model) = 0;
+
+            virtual void setDepthMask(bool enabled) = 0;
+            virtual void setWireframe(bool enabled) = 0;
+            virtual void beginDebugLines() = 0;
+            virtual void drawDebugLine(const glm::vec3 &start, const glm::vec3 &end, const glm::vec3 &color) = 0;
+            virtual void endDebugLines() = 0;
         };
 
     } // namespace Render

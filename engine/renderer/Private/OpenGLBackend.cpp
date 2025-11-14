@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <vector>
 
 #include "OpenGLBackend.h"
 #include <GLFW/glfw3.h>
@@ -341,6 +342,43 @@ void OpenGLBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
     }
 }
 
+
+void OpenGLBackend::beginShadowPass() {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFrameBuffer);
+    glViewport(0, 0, m_shadowMapResolution, m_shadowMapResolution);
+    glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void OpenGLBackend::endShadowPass() {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_frameBuffer);
+    glViewport(0, 0, m_Backbuffer.x, m_Backbuffer.y);
+    glUseProgram(0);
+}
+
+void OpenGLBackend::drawMeshDepthOnly(const Mesh &mesh, const glm::mat4 &model) {
+    if (!m_currentShader->programID)
+        return;
+
+    glUseProgram(m_currentShader->programID);
+
+    GLint locModel = getUniformLocation(*m_currentShader, "uModel");
+    glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(model));
+
+    GLMesh &glMesh = getOrCreateGLMesh(mesh);
+    glBindVertexArray(glMesh.vertexArrayObject);
+
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+
+    if (glMesh.indexCount > 0) {
+        glDrawElements(GL_TRIANGLES, glMesh.indexCount, GL_UNSIGNED_INT, 0);
+    } else {
+        glDrawArrays(GL_TRIANGLES, 0, glMesh.vertexCount);
+    }
+
+    glBindVertexArray(0);
+}
+
 bool OpenGLBackend::initialiseFrameBuffer() {
     // Texture
     glGenTextures(1, &m_colorTexture);
@@ -412,3 +450,75 @@ void OpenGLBackend::setUniform1f(const std::string &name, float value) {
 }
 
 void OpenGLBackend::setDepthMask(bool enabled) { glDepthMask(enabled ? GL_TRUE : GL_FALSE); }
+
+void OpenGLBackend::setWireframe(bool enabled) {
+    if (enabled) {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    } else {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+}
+
+void OpenGLBackend::beginDebugLines() {
+    m_debugLinesData.clear();
+}
+
+void OpenGLBackend::drawDebugLine(const glm::vec3 &start, const glm::vec3 &end, const glm::vec3 &color) {
+    // two vertices: pos + color
+    m_debugLinesData.reserve(m_debugLinesData.size() + 12);
+    // start
+    m_debugLinesData.push_back(start.x);
+    m_debugLinesData.push_back(start.y);
+    m_debugLinesData.push_back(start.z);
+    m_debugLinesData.push_back(color.r);
+    m_debugLinesData.push_back(color.g);
+    m_debugLinesData.push_back(color.b);
+    // end
+    m_debugLinesData.push_back(end.x);
+    m_debugLinesData.push_back(end.y);
+    m_debugLinesData.push_back(end.z);
+    m_debugLinesData.push_back(color.r);
+    m_debugLinesData.push_back(color.g);
+    m_debugLinesData.push_back(color.b);
+}
+
+void OpenGLBackend::endDebugLines() {
+    if (m_debugLinesData.empty())
+        return;
+
+    if (m_debugLinesVao == 0) {
+        glGenVertexArrays(1, &m_debugLinesVao);
+        glGenBuffers(1, &m_debugLinesVbo);
+
+        glBindVertexArray(m_debugLinesVao);
+        glBindBuffer(GL_ARRAY_BUFFER, m_debugLinesVbo);
+
+        const GLsizei stride = sizeof(float) * 6; // vec3 pos + vec3 color
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void*)0);
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
+
+        glBindVertexArray(0);
+    }
+
+    glBindVertexArray(m_debugLinesVao);
+    glBindBuffer(GL_ARRAY_BUFFER, m_debugLinesVbo);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_debugLinesData.size() * sizeof(float)),
+                 m_debugLinesData.data(), GL_DYNAMIC_DRAW);
+
+    glEnable(GL_DEPTH_TEST);
+    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_debugLinesData.size() / 6));
+
+    glBindVertexArray(0);
+}
+
+void OpenGLBackend::bindTexture(const std::string &name, unsigned int textureID, int slot) {
+    if (!m_currentShader || m_currentShader->programID == 0)
+        return;
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0)
+        glUniform1i(loc, slot);
+}

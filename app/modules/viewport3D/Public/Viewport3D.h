@@ -4,9 +4,12 @@
 #include <memory>
 #include <string>
 #include <string_view>
-#include <CameraController.h>
-#include <UIContext.h>
 #include <imgui.h>
+#include <glm/glm.hpp>
+#include "GizmoSystem.h"
+#include "CameraController.h"
+#include "UIContext.h"
+#include "Camera.h"
 
 namespace Arche {
     namespace GUI {
@@ -22,6 +25,7 @@ namespace Arche {
             std::shared_ptr<Arche::GUI::UIContext> context;
             std::shared_ptr<CameraController> cameraController;
             std::shared_ptr<Arche::Render::Camera> attachedCamera;
+            std::unique_ptr<Arche::GUI::GizmoSystem> m_gizmoSystem;
 
             void Reset();
 
@@ -41,10 +45,11 @@ namespace Arche {
             void HandleContextMenu(const ImVec2 &canvasP0, const ImVec2 &canvasSize, const ImVec2 &mousePos,
                                    std::shared_ptr<Arche::Render::Camera> camera);
 
-            void HandleEditPopup(const ImVec2 &canvasP0, const ImVec2 &canvasSize);
-
             void DrawCameraOverlay(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
                                    std::shared_ptr<Arche::Render::Camera> camera);
+
+            void DrawCameraViewGizmo(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
+                                     std::shared_ptr<Arche::Render::Camera> camera, ImDrawList *drawList);  
         };
     } // namespace GUI
 } // namespace Arche
