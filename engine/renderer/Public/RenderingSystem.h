@@ -80,6 +80,8 @@ namespace Arche {
                     ARCHE_LOG_ERROR(m_logger, "Main camera not set, cannot render frame.");
                     return;
                 }
+                RenderPassSettings renderingSettings;
+                renderingSettings.globalSettings = settings;
 
                 glm::mat4 view = glm::mat4(m_mainCamera->GetViewMatrix());
                 glm::mat4 projection = glm::mat4(m_mainCamera->GetProjectionMatrix());
@@ -102,7 +104,7 @@ namespace Arche {
                         viewData.opaqueObjects.push_back(entity);
                     }
 
-                    pass->render(viewData, *m_backend, *m_mainCamera, m_resources, settings);
+                    pass->render(viewData, *m_backend, *m_mainCamera, m_resources, renderingSettings);
                 }
                 m_backend->endFrame();
             }
@@ -115,6 +117,7 @@ namespace Arche {
             std::unique_ptr<IRenderBackend> m_backend;
             std::shared_ptr<Core::LoggingService> m_logger;
             std::shared_ptr<Arche::Render::Camera> m_mainCamera;
+            Arche::Render::RenderPassSettings m_renderPassSettings;
             ResourceRegistry m_resources;
 
             glm::ivec2 m_backBufferSize;

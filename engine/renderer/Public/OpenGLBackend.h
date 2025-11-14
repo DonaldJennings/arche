@@ -53,6 +53,13 @@ namespace Arche {
             void setLogger(std::shared_ptr<Core::LoggingService> loggerIn) { mLogger = loggerIn; };
             void drawMesh(const Mesh &mesh, const glm::mat4 &model) override;
             unsigned int getRenderTextureID() const override { return m_colorTexture; }
+            void bindTexture(const std::string &name, unsigned int textureID, int slot) override;
+
+            void initialiseShadowResources(int resolution) override;
+            void beginShadowPass(const glm::mat4 &lightViewProj, const glm::mat4 &lightProj) override;
+            void endShadowPass() override;
+            unsigned int getShadowMapTextureID() const override { return m_shadowMapTexture; }
+            void drawMeshDepthOnly(const Mesh &mesh, const glm::mat4 &model) override;
 
             void setUniformMat4(const std::string &name, const glm::mat4 &value) override;
             void setUniformVec4(const std::string &name, const glm::vec4 &value) override;
@@ -77,6 +84,13 @@ namespace Arche {
             unsigned int m_frameBuffer = 0;
             unsigned int m_colorTexture = 0;
             unsigned int m_depthStencilRbo = 0;
+
+            // Shadow mapping resources
+            GLuint m_shadowFrameBuffer = 0;
+            GLuint m_shadowMapTexture = 0;
+            int m_shadowMapResolution = 2048;
+
+            GLShaderProgram m_shadowProgram;
 
             std::unordered_map<std::string, GLShaderProgram> m_shaders;
             std::unordered_map<const Mesh *, GLMesh> m_meshes;

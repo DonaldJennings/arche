@@ -342,6 +342,105 @@ void OpenGLBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
     }
 }
 
+void Arche::Render::OpenGLBackend::initialiseShadowResources(int resolution) 
+{
+    m_shadowMapResolution = resolution;
+
+    // 1) Create depth texture
+    glGenTextures(1, &m_shadowMapTexture);
+    glBindTexture(GL_TEXTURE_2D, m_shadowMapTexture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, m_shadowMapResolution, m_shadowMapResolution, 0, GL_DEPTH_COMPONENT, GL_FLOAT,
+                 nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    float borderColor[] = {1.0, 1.0, 1.0, 1.0};
+    glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+    // 2) Create FBO
+    glGenFramebuffers(1, &m_shadowFrameBuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFrameBuffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, m_shadowMapTexture, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // 3) Create shadow depth shader program (using hardcoded GLSL or a Shader object)
+    const char *depthVS = R"glsl(
+        #version 330 core
+        layout(location=0) in vec3 inPosition;
+        uniform mat4 uLightView;
+        uniform mat4 uLightProj;
+        uniform mat4 uModel;
+        void main() {
+            gl_Position = uLightProj * uLightView * uModel * vec4(inPosition, 1.0);
+        }
+    )glsl";
+
+    const char *depthFS = R"glsl(
+        #version 330 core
+        void main() { }
+    )glsl";
+
+    GLuint vs = compileShader(GL_VERTEX_SHADER, depthVS);
+    GLuint fs = compileShader(GL_FRAGMENT_SHADER, depthFS);
+    GLuint prog = linkProgram(vs, fs);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    m_shadowProgram.programID = prog;
+}
+
+void OpenGLBackend::beginShadowPass(const glm::mat4 &lightView, const glm::mat4 &lightProj) {
+    glBindFramebuffer(GL_FRAMEBUFFER, m_shadowFrameBuffer);
+    glViewport(0, 0, m_shadowMapResolution, m_shadowMapResolution);
+    glClear(GL_DEPTH_BUFFER_BIT);
+
+    glUseProgram(m_shadowProgram.programID);
+
+    // Upload light matrices
+    GLint locView = getUniformLocation(m_shadowProgram, "uLightView");
+    GLint locProj = getUniformLocation(m_shadowProgram, "uLightProj");
+    glUniformMatrix4fv(locView, 1, GL_FALSE, glm::value_ptr(lightView));
+    glUniformMatrix4fv(locProj, 1, GL_FALSE, glm::value_ptr(lightProj));
+}
+
+void OpenGLBackend::endShadowPass() {
+    // Return to main framebuffer
+    glBindFramebuffer(GL_FRAMEBUFFER, m_frameBuffer);
+
+    // IMPORTANT: restore viewport to match your backbuffer
+    glViewport(0, 0, m_Backbuffer.x, m_Backbuffer.y);
+
+    glUseProgram(0);
+}
+
+void OpenGLBackend::drawMeshDepthOnly(const Mesh &mesh, const glm::mat4 &model) {
+    if (!m_shadowProgram.programID)
+        return;
+
+    glUseProgram(m_shadowProgram.programID);
+
+    GLint locModel = getUniformLocation(m_shadowProgram, "uModel");
+    glUniformMatrix4fv(locModel, 1, GL_FALSE, glm::value_ptr(model));
+
+    GLMesh &glMesh = getOrCreateGLMesh(mesh);
+    glBindVertexArray(glMesh.vertexArrayObject);
+
+    glEnable(GL_DEPTH_TEST);
+    glDisable(GL_BLEND);
+
+    if (glMesh.indexCount > 0) {
+        glDrawElements(GL_TRIANGLES, glMesh.indexCount, GL_UNSIGNED_INT, 0);
+    } else {
+        glDrawArrays(GL_TRIANGLES, 0, glMesh.vertexCount);
+    }
+
+    glBindVertexArray(0);
+}
+
 bool OpenGLBackend::initialiseFrameBuffer() {
     // Texture
     glGenTextures(1, &m_colorTexture);
@@ -474,4 +573,14 @@ void OpenGLBackend::endDebugLines() {
     glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(m_debugLinesData.size() / 6));
 
     glBindVertexArray(0);
+}
+
+void OpenGLBackend::bindTexture(const std::string &name, unsigned int textureID, int slot) {
+    if (!m_currentShader || m_currentShader->programID == 0)
+        return;
+    glActiveTexture(GL_TEXTURE0 + slot);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    GLint loc = getUniformLocation(*m_currentShader, name);
+    if (loc >= 0)
+        glUniform1i(loc, slot);
 }

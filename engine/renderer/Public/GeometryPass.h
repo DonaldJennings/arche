@@ -15,18 +15,14 @@ namespace Arche {
             }
 
             void render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                        ResourceRegistry &resources, const Core::RenderSettings &settings) override {
+                        ResourceRegistry &resources, RenderPassSettings &settings) override {
 
                 // Apply camera matrices globally
                 backend.setViewProjection(view.viewMatrix, view.projectionMatrix);
 
-                backend.setUniformVec3("uCameraPos", view.cameraPosition);
-                backend.setUniformVec3("uLightColor", settings.ambientLight);
-                backend.setUniformVec3("uLightPos", settings.ambientPosition);
-
-                // Loop over all opaque entities (later you'll add transparent pass)
+                // Opaque geometry
                 for (const auto &e : view.opaqueObjects) {
-                    drawEntity(e, resources, backend);
+                    drawEntity(e, resources, backend, settings, view.cameraPosition);
                 }
             }
 
@@ -36,63 +32,60 @@ namespace Arche {
 
           private:
             void uploadMaterialProperties(IRenderBackend &backend, const Material &material) {
-                // ------------------------------------------------------------
-                // Upload float uniforms
-                // ------------------------------------------------------------
+                // Floats
                 for (const auto &pair : material.getFloats()) {
-                    const std::string &name = pair.first;
-                    float value = pair.second;
-
-                    backend.setUniform1f(name.c_str(), value);
+                    backend.setUniform1f(pair.first.c_str(), pair.second);
                 }
-
-                // ------------------------------------------------------------
-                // Upload vec3 uniforms
-                // ------------------------------------------------------------
+                // Vec3
                 for (const auto &pair : material.getVec3s()) {
-                    const std::string &name = pair.first;
-                    const glm::vec3 &value = pair.second;
-
-                    backend.setUniformVec3(name.c_str(), value);
+                    backend.setUniformVec3(pair.first.c_str(), pair.second);
                 }
-
-                // ------------------------------------------------------------
-                // Upload vec4 uniforms
-                // ------------------------------------------------------------
+                // Vec4
                 for (const auto &pair : material.getVec4s()) {
-                    const std::string &name = pair.first;
-                    const glm::vec4 &value = pair.second;
-
-                    backend.setUniformVec4(name.c_str(), value);
+                    backend.setUniformVec4(pair.first.c_str(), pair.second);
                 }
+                // If you support textures in Material, bind them here (albedo/roughness/metallic/normal, etc.)
             }
 
             void drawEntity(std::shared_ptr<Scene::IEntity> entity, const ResourceRegistry &resources,
-                            IRenderBackend &backend) {
-                if (!entity)
-                    return;
+                            IRenderBackend &backend, RenderPassSettings &settings, glm::vec3 cameraPos) {
+                if (!entity) return;
 
                 // Fetch mesh + material
                 auto mesh = resources.getMesh(entity->getMeshId());
                 auto material = resources.getMaterial(entity->getMaterialId());
+                if (!mesh || !material) return;
 
-                if (!mesh || !material)
-                    return;
+                // Shader from material
+                backend.setShader(resources.getShader(material->getShaderName()));
 
-                // Shader comes directly from material
-                auto shader = material->getShaderName();
-                backend.setShader(resources.getShader(shader));
+                
+                // Camera
+                backend.setUniformVec3("uCameraPos", cameraPos);
 
-                // Temporary hardcoded directional light or point light:
-                // (Replace with values from RenderSettings later)
-                backend.setUniformVec3("uLightPos", glm::vec3(4, 8, 4));
-                backend.setUniformVec3("uLightColor", glm::vec3(300, 300, 300));
+                // Light color
+                backend.setUniformVec3("uLightColor", glm::vec3(1.0f)); // unit intensity
 
-                // Upload material properties (albedo, roughness, metallic, etc)
+                // Shadows
+                if (settings.shadowSettings.enabled) {
+                    backend.setUniformMat4("uLightSpaceMatrix", settings.shadowSettings.lightSpaceMatrix);
+                    // Bind depth texture to a stable unit; the backend should set uShadowMap to this unit internally.
+                    backend.bindTexture("uShadowMap", settings.shadowSettings.shadowMapID, 5);
+                }
+
+                // Provide sane defaults for PBR (material upload will override if present)
+                backend.setUniformVec3("uAlbedo", glm::vec3(0.8f));
+                backend.setUniform1f("uMetallic", 0.0f);
+                backend.setUniform1f("uRoughness", 0.5f);
+                backend.setUniform1f("uAO", 1.0f);
+
+
+                // Upload material uniforms (overrides defaults set earlier)
                 uploadMaterialProperties(backend, *material);
 
-                // Build model matrix
+                // Build model matrix (include rotation if your IEntity exposes it)
                 glm::mat4 model = glm::translate(glm::mat4(1.0f), entity->getPosition());
+                // If rotation exists: model *= glm::mat4_cast(entity->getRotation());
                 model = glm::scale(model, entity->getScale());
 
                 backend.drawMesh(*mesh, model);

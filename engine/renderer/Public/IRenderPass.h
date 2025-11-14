@@ -11,30 +11,19 @@
 namespace Arche {
     namespace Render {
 
-        class IRenderTechnique
+        struct ShadowSettings
         {
-          public:
-            virtual ~IRenderTechnique() = default;
-
-            virtual std::shared_ptr<Shader> getShader() const = 0;
-            virtual void applyGlobals(IRenderBackend &backed, const Camera &camera) = 0;
-            virtual void applyMaterial(IRenderBackend &backend, const Material &material) = 0;
+            unsigned int shadowMapID{0};
+            glm::mat4 lightSpaceMatrix{1.0f};
+            int resolution{2048};
+            bool enabled{false};
         };
-
         class RenderPassSettings
         {
           public:
             RenderPassSettings() = default;
-            bool isEnabled{true};
-            glm::vec3 clearColor{0.1f, 0.1f, 0.1f};
-            glm::vec3 ambientLight{0.2f, 0.2f, 0.2f};
-            glm::vec3 sunColor{1.0f, 1.0f, 0.9f};
-            glm::vec3 sunPosition{10.0f, 10.0f, 0.0f};
-
-            bool isDebugMode{true};
-            bool wireframe{false};
-            bool showGrid{true};
-            bool showAxes{true};
+            ShadowSettings shadowSettings;
+            Core::RenderSettings globalSettings;
 
           private:
         };
@@ -56,7 +45,7 @@ namespace Arche {
             virtual ~IRenderPass() = default;
             virtual void initialise(IRenderBackend &backend) = 0;
             virtual void render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                                ResourceRegistry &resources, const Core::RenderSettings &settings) = 0;
+                                ResourceRegistry &resources, RenderPassSettings &settings) = 0;
             virtual void shutdown(IRenderBackend &backend) = 0;
         };
 

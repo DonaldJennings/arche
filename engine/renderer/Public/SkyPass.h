@@ -20,7 +20,7 @@ namespace Arche::Render {
         void initialise(IRenderBackend &backend) override;
 
         void render(const RenderView &view, IRenderBackend &backend, const Camera &camera, ResourceRegistry &resources,
-                    const Core::RenderSettings &settings) override;
+                    RenderPassSettings &settings) override;
 
         void shutdown(IRenderBackend &backend) override;
 

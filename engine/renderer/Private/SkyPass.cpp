@@ -5,7 +5,7 @@ namespace Arche::Render {
     void SkyPass::initialise(IRenderBackend &backend) {}
 
     void SkyPass::render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                         ResourceRegistry &resources, const Core::RenderSettings &settings) {
+                         ResourceRegistry &resources, RenderPassSettings &settings) {
         // Create a cube mesh if not already present
         auto cubeMesh = resources.getMesh("skybox.cube");
         if (!cubeMesh) {

@@ -20,6 +20,7 @@
 #else
 #include <unistd.h>
 #endif
+#include <ShadowPass.h>
 
 namespace {
     // Returns the directory containing the application executable.
@@ -74,6 +75,7 @@ namespace Arche {
             renderingSystem->initialise(shaderLoader, materialLoader);
 
             renderingSystem->addRenderPass(std::make_shared<Render::SkyPass>());
+            renderingSystem->addRenderPass(std::make_shared<Render::ShadowPass>());
             renderingSystem->addRenderPass(std::make_shared<Render::GeometryPass>());
             renderingSystem->addRenderPass(std::make_shared<Render::DebugPass>());
 

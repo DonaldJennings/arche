@@ -1,7 +1,7 @@
 #include "DebugPass.h"
 
 void Arche::Render::DebugPass::render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
-                                      ResourceRegistry &resources, const Core::RenderSettings &settings) {
+                                      ResourceRegistry &resources, RenderPassSettings &settings) {
 
     // Bind the dedicated debug line shader
     if (auto debugShader = resources.getShader("DebugLines")) {
@@ -15,7 +15,7 @@ void Arche::Render::DebugPass::render(const RenderView &view, IRenderBackend &ba
     // ------------------------------------------------------------
     // Grid
     // ------------------------------------------------------------
-    if (settings.showGrid)
+    if (settings.globalSettings.showGrid)
         drawGrid(backend, view.cameraPosition, resources);
 
     // Restore
