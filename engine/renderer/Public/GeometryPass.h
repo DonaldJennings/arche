@@ -64,7 +64,8 @@ namespace Arche {
                 backend.setUniformVec3("uCameraPos", cameraPos);
 
                 // Light color
-                backend.setUniformVec3("uLightColor", glm::vec3(1.0f)); // unit intensity
+                backend.setUniformVec3("uLightDir", -settings.globalSettings.directionalLightDirection);
+                backend.setUniformVec3("uLightColor", settings.globalSettings.directionalLightColor); // unit intensity
 
                 // Shadows
                 if (settings.shadowSettings.enabled) {
@@ -72,13 +73,6 @@ namespace Arche {
                     // Bind depth texture to a stable unit; the backend should set uShadowMap to this unit internally.
                     backend.bindTexture("uShadowMap", settings.shadowSettings.shadowMapID, 5);
                 }
-
-                // Provide sane defaults for PBR (material upload will override if present)
-                backend.setUniformVec3("uAlbedo", glm::vec3(0.8f));
-                backend.setUniform1f("uMetallic", 0.0f);
-                backend.setUniform1f("uRoughness", 0.5f);
-                backend.setUniform1f("uAO", 1.0f);
-
 
                 // Upload material uniforms (overrides defaults set earlier)
                 uploadMaterialProperties(backend, *material);

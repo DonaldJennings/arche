@@ -21,13 +21,13 @@ namespace Arche::Render {
 
     void Arche::Render::ShadowPass::render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
                                            ResourceRegistry &resources, RenderPassSettings &settings) {
-        glm::vec3 lightDir = glm::normalize(glm::vec3(-1.0f, 10.0f, -1.0f));
+        glm::vec3 lightDir = glm::normalize(settings.globalSettings.directionalLightDirection);
 
-        glm::vec3 lightPos = -lightDir * 200.0f;
+        glm::vec3 lightPos = -lightDir * settings.globalSettings.directionalLightDistance;
 
-        float orthoRange = 100.0f;
-        glm::mat4 lightProj{glm::ortho(-orthoRange, orthoRange, -orthoRange, orthoRange, 1.0f, 200.0f)};
-        glm::mat4 lightView{glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f))};
+        float orthoRange = 500.0f;
+        glm::mat4 lightProj{glm::ortho(-orthoRange, orthoRange, -orthoRange, orthoRange, 0.1f, 1000.0f)};
+        glm::mat4 lightView{glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0f, 0.0f, 1.0f))};
 
         m_lightSpaceMatrix = lightProj * lightView;
 

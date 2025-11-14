@@ -13,6 +13,7 @@
 #include <iostream>
 #include <numeric>
 #include <vector>
+#include <glm/gtc/type_ptr.hpp>
 
 namespace Arche {
     namespace GUI {
@@ -37,9 +38,46 @@ namespace Arche {
                 ImGui::Checkbox("Show Axes", &renderSettings.showAxes);
             }
 
-            if (ImGui::CollapsingHeader("Lighting")) {
-                ImGui::ColorEdit3("Ambient Light", &renderSettings.ambientLight.x);
-                ImGui::SliderFloat("Ambient Strength", &renderSettings.ambientStrength, 0.0f, 1.0f);
+        if (ImGui::CollapsingHeader("Directional Light", ImGuiTreeNodeFlags_DefaultOpen)) {
+
+                auto &settings{context->globalSettings().getRenderSettings() };
+                auto &col = settings.directionalLightColor;
+                auto &dir = settings.directionalLightDirection;
+                auto &intensity = settings.directionalLightIntensity;
+                auto &dist = settings.directionalLightDistance;
+
+                //
+                // Color (RGB)
+                //
+                ImGui::ColorEdit3("Color", glm::value_ptr(col));
+
+                //
+                // Direction (normalized)
+                //
+                glm::vec3 d = dir;
+                if (ImGui::DragFloat3("Direction", glm::value_ptr(d), 0.05f, -1.0f, 1.0f)) {
+                    // Prevent zero vector; renormalize
+                    if (glm::dot(d, d) < 1e-4f) {
+                        d = glm::vec3(0.0f, -1.0f, 0.0f);
+                    }
+                    dir = glm::normalize(d);
+                }
+
+                //
+                // Intensity (RGB)
+                //
+                ImGui::DragFloat3("Intensity", glm::value_ptr(intensity), 0.1f, 0.0f, 100.0f);
+
+                //
+                // Distance (shadow projection position)
+                //
+                ImGui::DragFloat("Distance", &dist, 1.0f, 1.0f, 2000.0f);
+
+                //
+                // Debug output: actual light-world position
+                //
+                glm::vec3 lightPos = -dir * dist;
+                ImGui::Text("Computed Light Pos: (%.2f, %.2f, %.2f)", lightPos.x, lightPos.y, lightPos.z);
             }
 
             if (ImGui::CollapsingHeader("World Configuration")) {

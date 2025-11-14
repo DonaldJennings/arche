@@ -17,7 +17,7 @@ uniform float uAO        = 1.0;
 uniform vec3 uCameraPos = vec3(0.0, 0.0, 5.0);
 
 // Light (fallbacks provided)
-uniform vec3 uLightDir   = normalize(vec3(-1.0, -1.0, -1.0));
+uniform vec3 uLightDir;
 uniform vec3 uLightColor = vec3(10.0);
 
 // Shadow map (optional)

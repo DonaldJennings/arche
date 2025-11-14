@@ -14,6 +14,11 @@ namespace Arche {
             float ambientStrength{0.5f};
             glm::vec3 ambientPosition{10.0f, 10.0f, 0.0f};
 
+            glm::vec3 directionalLightColor{1.0f, 1.0f, 1.0f};
+            glm::vec3 directionalLightDirection{-1.0f, -1.0f, -1.0f};
+            glm::vec3 directionalLightIntensity{1.0f, 1.0f, 1.0f};
+            float directionalLightDistance{100.0f};
+
             bool wireframe{false};
             bool showGrid{true};
             bool showAxes{true};
