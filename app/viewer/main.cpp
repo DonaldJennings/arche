@@ -15,11 +15,14 @@
 #include <WorldSystem.h>
 #include <Camera.h> // Include the Camera header
 
+
 #include <DockspacePanel.h>
 #include <GUILogSink.h>
 #include <ImGuiBackend.h>
 #include <LogPanel.h>
 #include <MetricsPanel.h>
+#include <MaterialBrowser.h>
+#include <ShaderBrowser.h>
 #include <PanelRegistry.h>
 #include <WorldProperties.h>
 
@@ -62,6 +65,8 @@ int main() {
         panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::Viewport3DPanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::WorldProperties>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::MaterialBrowser>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::ShaderBrowser>(context));
 
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
