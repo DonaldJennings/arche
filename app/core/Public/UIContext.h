@@ -10,12 +10,14 @@ namespace Arche {
 
         struct UIContext {
           private:
+            enum class SimulationState { Idle, Running, Paused };
+
             std::shared_ptr<Core::EngineCore> engineCore;
             std::optional<std::uint64_t> selectedEntityID;
             std::optional<std::uint64_t> hoveredEntityID;
 
-            bool m_simulationPaused = true;
-            bool m_simulationHasStarted = false;
+            SimulationState m_simulationState{SimulationState::Idle};
+            bool m_hasInitialSnapshot{false};
 
           public:
             UIContext(std::shared_ptr<Core::EngineCore> engineIn) : engineCore{engineIn} {}
@@ -25,29 +27,51 @@ namespace Arche {
             auto worldSystem() const { return engineCore->getWorld(); }
             auto &globalSettings() const { return engineCore->getGlobalSettings(); }
 
-            bool simulationIsPaused() const { return m_simulationPaused; }
+            bool simulationIsPaused() const { return m_simulationState != SimulationState::Running; }
 
             void toggleSimulationState() {
-                if (m_simulationPaused) {
-                    if (!m_simulationHasStarted) {
-                        engineCore->getWorld()->saveInitialState(); // SAVE ONLY ON FIRST PLAY
-                        m_simulationHasStarted = true;
-                    }
+                auto timer = engineCore->getTimer();
+                auto world = engineCore->getWorld();
+                if (!timer || !world) {
+                    return;
+                }
 
-                    engineCore->getTimer()->resume();
-                    m_simulationPaused = false;
-                } else {
-                    engineCore->getTimer()->pause();
-                    m_simulationPaused = true;
+                switch (m_simulationState) {
+                case SimulationState::Idle:
+                    if (!m_hasInitialSnapshot) {
+                        world->saveInitialState();
+                        m_hasInitialSnapshot = true;
+                    }
+                    timer->reset();
+                    m_simulationState = SimulationState::Running;
+                    break;
+                case SimulationState::Running:
+                    timer->pause();
+                    m_simulationState = SimulationState::Paused;
+                    break;
+                case SimulationState::Paused:
+                    timer->resume();
+                    m_simulationState = SimulationState::Running;
+                    break;
                 }
             }
 
             void resetSimulationState() {
-                engineCore->getTimer()->reset();
-                engineCore->getWorld()->restoreInitialState();
+                auto timer = engineCore->getTimer();
+                auto world = engineCore->getWorld();
+                if (!timer || !world) {
+                    return;
+                }
 
-                m_simulationPaused = true;
-                m_simulationHasStarted = false;
+                timer->reset();
+                timer->pause();
+
+                if (m_hasInitialSnapshot) {
+                    world->restoreInitialState();
+                }
+
+                m_simulationState = SimulationState::Idle;
+                m_hasInitialSnapshot = false;
             }
 
             // Selection:

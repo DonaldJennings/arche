@@ -270,12 +270,51 @@ namespace Arche {
         }
 
         // Helper: draw camera overlay in top-left of viewport
+        void Viewport3DPanel::DrawSimulationControls(const ImVec2 &canvasP0, const ImVec2 &canvasSize) {
+            if (!context) {
+                return;
+            }
+
+            const float margin = 18.0f;
+            ImVec2 overlayPos = ImVec2(canvasP0.x + canvasSize.x * 0.5f, canvasP0.y + canvasSize.y - margin);
+
+            ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always, ImVec2(0.5f, 1.0f));
+            ImGui::SetNextWindowBgAlpha(0.6f);
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+                                     ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
+
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 12.0f);
+            ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(12.0f, 6.0f));
+            if (ImGui::Begin("Simulation Controls##3DOverlay", nullptr, flags)) {
+                bool paused = context->simulationIsPaused();
+                const char *playPauseLabel = paused ? "Play" : "Pause";
+
+                if (ImGui::Button(playPauseLabel, ImVec2(80.0f, 0.0f))) {
+                    context->toggleSimulationState();
+                }
+
+                ImGui::SameLine();
+                if (ImGui::Button("Reset", ImVec2(80.0f, 0.0f))) {
+                    context->resetSimulationState();
+                }
+
+                ImGui::SameLine();
+                ImGui::TextDisabled(paused ? "Paused" : "Running");
+            }
+            ImGui::End();
+            ImGui::PopStyleVar(2);
+        }
+
         void Viewport3DPanel::DrawCameraOverlay(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
                                                 std::shared_ptr<Arche::Render::Camera> camera) {
+            if (!camera) {
+                return;
+            }
+
             const float margin = 8.0f;
             ImVec2 overlayPos = ImVec2(canvasP0.x + margin, canvasP0.y + margin);
 
-            // A tiny overlay window positioned inside the viewport
             ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
             ImGui::SetNextWindowBgAlpha(0.55f);
             ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
@@ -283,26 +322,7 @@ namespace Arche {
                                      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
 
             ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
-            if (ImGui::Begin("Viewport Controls##3DOverlay", nullptr, flags)) {
-                // Play/Pause toggle button with state-reflecting text
-                bool paused = context->simulationIsPaused();
-                const char *playPauseLabel = paused ? "Play" : "Pause";
-                if (ImGui::Button(playPauseLabel)) {
-
-                    context->toggleSimulationState();
-                }
-                ImGui::SameLine();
-
-                // Reset world button
-                if (ImGui::Button("Reset")) {
-                    context->resetSimulationState();
-                }
-
-                // Optional: small state text
-                ImGui::SameLine();
-                ImGui::TextDisabled(paused ? "(Paused)" : "(Running)");
-
-                // Camera info (kept minimal)
+            if (ImGui::Begin("Viewport Camera Info##3DOverlay", nullptr, flags)) {
                 glm::dvec3 camPos = camera->GetPosition();
                 ImGui::Text("Pos: (%.2f, %.2f, %.2f)", camPos.x, camPos.y, camPos.z);
             }
@@ -410,6 +430,7 @@ namespace Arche {
             // ---------------------------------------------------------
             // 6. Overlay last
             // ---------------------------------------------------------
+            DrawSimulationControls(canvasP0, canvasSize);
             DrawCameraOverlay(canvasP0, canvasSize, camera);
 
             if (ImGui::IsKeyPressed(ImGuiKey_Insert)) {

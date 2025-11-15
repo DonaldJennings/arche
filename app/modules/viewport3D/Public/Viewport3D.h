@@ -42,6 +42,8 @@ namespace Arche {
             void HandleCameraInput(const ImVec2 &canvasP0, const ImVec2 &canvasP1, const ImVec2 &canvasSize,
                                    std::shared_ptr<Arche::Render::Camera> camera);
 
+            void DrawSimulationControls(const ImVec2 &canvasP0, const ImVec2 &canvasSize);
+
             void DrawCameraOverlay(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
                                    std::shared_ptr<Arche::Render::Camera> camera);
 
