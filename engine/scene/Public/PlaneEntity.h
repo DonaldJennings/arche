@@ -2,6 +2,7 @@
 #include "PlaneCollider.h"
 #include "IEntity.h"
 #include <glm/glm.hpp>
+#include <memory>
 
 namespace Arche {
 
@@ -19,7 +20,16 @@ namespace Arche {
             // --- Transform ---
             glm::vec3 getPosition() const override { return m_Position; }
             glm::vec3 *getPositionPtr() override { return &m_Position; }
-            void setPosition(const glm::vec3 &pos) override { m_Position = pos; }
+            void setPosition(const glm::vec3 &pos) override {
+                m_Position = pos;
+                m_Distance = glm::dot(m_Normal, m_Position);
+
+                if (m_Collider) {
+                    if (auto planeCollider = std::dynamic_pointer_cast<Physics::PlaneCollider>(m_Collider)) {
+                        planeCollider->SetDistance(m_Distance);
+                    }
+                }
+            }
 
             glm::vec3 getRotation() const override { return m_Rotation; }
             void setRotation(const glm::vec3 &rot) override { m_Rotation = rot; }
@@ -29,7 +39,7 @@ namespace Arche {
 
             // --- Lifecycle ---
             void update(double deltaTime) override {
-                // Static entity — no per-frame updates
+                // Static entity -- no per-frame updates
             }
 
             // --- Components ---
@@ -51,7 +61,10 @@ namespace Arche {
             float GetDistance() const { return m_Distance; }
 
             std::shared_ptr<IEntity> clone() const override {
-                auto cloned{std::make_shared<PlaneEntity>(m_Normal, m_Distance)};
+                auto cloned{std::make_shared<PlaneEntity>(m_Normal, glm::dot(m_Normal, m_Position))};
+                cloned->setPosition(m_Position);
+                cloned->setRotation(m_Rotation);
+                cloned->setScale(m_Scale);
                 cloned->setID(m_id);
                 return cloned;
             }

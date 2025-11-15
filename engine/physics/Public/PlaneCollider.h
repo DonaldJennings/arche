@@ -17,6 +17,9 @@ namespace Arche {
             const glm::vec3 &GetNormal() const { return m_Normal; }
             float GetDistance() const { return m_Distance; }
 
+            void SetNormal(const glm::vec3 &normal) { m_Normal = glm::normalize(normal); }
+            void SetDistance(float distance) { m_Distance = distance; }
+
           private:
             glm::vec3 m_Normal;
             float m_Distance;
