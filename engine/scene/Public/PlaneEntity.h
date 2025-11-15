@@ -46,8 +46,9 @@ namespace Arche {
             std::shared_ptr<Physics::RigidBody> getRigidBody() override { return m_Rigidbody; }
             std::shared_ptr<Physics::ICollider> getCollider() override { return m_Collider; }
             
-            std::string_view getMeshId() override { return "plane.mesh"; }
-            std::string_view getMaterialId() override { return "plane.mat"; }
+            std::string_view getMeshId() override { return m_meshName; }
+            std::string_view getMaterialId() override { return m_materialName; }
+            void setMaterialId(std::string_view materialId) override { m_materialName = std::string(materialId); }
             std::string_view getShaderId() override { return "flat.color"; }
 
             // --- Identification ---
@@ -82,6 +83,8 @@ namespace Arche {
             std::shared_ptr<Physics::ICollider> m_Collider;
             std::shared_ptr<Render::IRenderable> m_Renderable;
             std::shared_ptr<Physics::RigidBody> m_Rigidbody;
+            std::string m_meshName{"plane.mesh"};
+            std::string m_materialName{"plane.mat"};
         };
     } // namespace Scene
 } // namespace Arche

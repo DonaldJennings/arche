@@ -12,6 +12,13 @@
 #include <WorldSystem.h>
 
 namespace Arche {
+    namespace Render {
+        class Material;
+        class ResourceRegistry;
+    }
+}
+
+namespace Arche {
     namespace GUI {
 
         class EntityInspector : public IPanel {
@@ -25,6 +32,15 @@ namespace Arche {
           private:
             std::string name;
             std::shared_ptr<EditorSession> context;
+
+            std::shared_ptr<Scene::IEntity> resolveSelectedEntity() const;
+            static std::string makeEntityMaterialPrefix(std::uint64_t entityId);
+            static std::string makeEntityMaterialName(std::uint64_t entityId, std::string_view baseName);
+            static bool isEntityMaterialOverride(std::uint64_t entityId, std::string_view materialName);
+            std::shared_ptr<Render::Material>
+            ensureEntityMaterialOverride(const std::shared_ptr<Scene::IEntity> &entity,
+                                         Render::ResourceRegistry &registry,
+                                         std::shared_ptr<Render::Material> currentMaterial) const;
         };
 
     } // namespace GUI
