@@ -15,6 +15,11 @@ namespace Arche {
             std::vector<std::shared_ptr<IEntity>> bodies;
         };
 
+        struct EntitySnapshot {
+            std::uint64_t id{0};
+            std::shared_ptr<IEntity> prototype;
+        };
+
         class WorldSystem : public Core::ISubsystem {
           public:
             WorldSystem(std::shared_ptr<Arche::Core::LoggingService> logger,
@@ -36,24 +41,13 @@ namespace Arche {
 
             void setPhysics(std::shared_ptr<Physics::PhysicsSystem> physicsSystem) { m_physicsSystem = physicsSystem; }
 
-            inline std::uint64_t addEntity(std::shared_ptr<IEntity> entity) {
+            inline std::uint64_t addEntity(std::shared_ptr<IEntity> entity) { return insertEntity(std::move(entity)); }
 
-                uint64_t newEntityID = m_nextEntityID++;
-
-                entity->setID(newEntityID);
-
-                m_entityMap[newEntityID] = entity;
-
+            inline void clearEntities() {
+                m_entityMap.clear();
                 if (m_physicsSystem) {
-                    Physics::PhysicsBody body;
-                    body.rb = entity->getRigidBody();
-                    body.collider = entity->getCollider();
-                    body.position = entity->getPositionPtr();
-
-                    m_physicsSystem->addBody(body);
+                    m_physicsSystem->reset();
                 }
-
-                return newEntityID;
             }
 
             inline void removeEntity(std::uint64_t entityID) { m_entityMap.erase(entityID); }
@@ -110,18 +104,15 @@ namespace Arche {
                 }
             }
 
-            void reset() {
-                if (!m_entityMap.empty()) {
-                    m_entityMap.clear();
-                }
-                restoreInitialState();
-                if (m_physicsSystem) {
-                    m_physicsSystem->reset();
-                }
-            }
+            void reset() { restoreInitialState(); }
 
             void saveInitialState();
             void restoreInitialState();
+
+            void clearInitialState() {
+                m_initialState.clear();
+                m_initialNextEntityID = 1;
+            }
 
             std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysicsSystem() const { return m_physicsSystem; }
 
@@ -129,9 +120,12 @@ namespace Arche {
             std::uint64_t m_nextEntityID{1};
             std::unordered_map<std::uint64_t, std::shared_ptr<IEntity>> m_entityMap;
 
-            std::vector<std::shared_ptr<IEntity>> m_initialState;
+            std::vector<EntitySnapshot> m_initialState;
+            std::uint64_t m_initialNextEntityID{1};
             std::shared_ptr<Physics::PhysicsSystem> m_physicsSystem;
             std::shared_ptr<Arche::Core::LoggingService> m_logger;
+
+            std::uint64_t insertEntity(std::shared_ptr<IEntity> entity, std::optional<std::uint64_t> forcedId = std::nullopt);
         };
 
     } // namespace Scene

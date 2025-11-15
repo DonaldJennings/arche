@@ -48,7 +48,7 @@ namespace Arche {
             /**
              * @brief Resets the timer to the current time.
              */
-            void reset();
+            void reset(bool paused = false);
 
             /**
              * @brief Pause timing. While paused, deltaTime() will be 0 and elapsed() will not advance.
@@ -59,6 +59,21 @@ namespace Arche {
              * @brief Resume timing after pause.
              */
             void resume();
+
+            /**
+             * @brief Convenience helper that resumes when paused and pauses when running.
+             */
+            void setPaused(bool paused);
+
+            /**
+             * @brief Resets and starts advancing time from zero.
+             */
+            void start();
+
+            /**
+             * @brief Resets and keeps the clock paused.
+             */
+            void stop();
 
             /**
              * @brief Returns true when paused.

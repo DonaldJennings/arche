@@ -9,14 +9,14 @@
 
 #include <IPanel.h>
 #include <WorldSystem.h>
-#include "UIContext.h"
+#include "EditorSession.h"
 
 namespace Arche {
     namespace GUI {
 
         class MaterialBrowser : public IPanel {
           public:
-            explicit MaterialBrowser(std::shared_ptr<UIContext> contextIn)
+            explicit MaterialBrowser(std::shared_ptr<EditorSession> contextIn)
                 : context{contextIn}, name{"Material Browser"} {}
 
             void Draw() override;
@@ -25,7 +25,7 @@ namespace Arche {
           private:
 
             std::string name;
-            std::shared_ptr<UIContext> context;
+            std::shared_ptr<EditorSession> context;
         };
 
     } // namespace GUI
