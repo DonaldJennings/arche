@@ -10,8 +10,7 @@
 
 #include <EngineCore.h>
 #include <LoggingService.h>
-#include <TimingService.h>
-#include <UIContext.h>
+#include <EditorSession.h>
 #include <WorldSystem.h>
 #include <Camera.h> // Include the Camera header
 
@@ -52,8 +51,8 @@ int main() {
         mainCamera->SetPosition({0.0, 5.0, 20.0});
         engineCore->getRenderer()->setMainCamera(mainCamera);
 
-        // 4. Create UIContext and pass references to services and WorldSystem
-        auto context = std::make_shared<Arche::GUI::UIContext>(engineCore);
+        // 4. Create the editor session wrapper around core engine services
+        auto context = std::make_shared<Arche::GUI::EditorSession>(engineCore);
 
         // 5. Setup GUI backend and panel registry
         Arche::GUI::PanelRegistry panels;
@@ -76,7 +75,7 @@ int main() {
         engineCore->getWorld()->addEntity(
             std::make_shared<Arche::Scene::SphereEntity>(2.50f, glm::vec3(0.0f, 10.0f, -15.0f)));
 
-        engineCore->getTimer()->pause();
+        engineCore->resetSimulation();
         
         // 6. Main loop
         while (!glfwWindowShouldClose(*window)) {
