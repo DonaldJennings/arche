@@ -430,7 +430,6 @@ namespace Arche {
             // ---------------------------------------------------------
             // 6. Overlay last
             // ---------------------------------------------------------
-            DrawCameraViewGizmo(canvasP0, canvasSize, camera, drawList);
             DrawSimulationControls(canvasP0, canvasSize);
             DrawCameraOverlay(canvasP0, canvasSize, camera);
 
