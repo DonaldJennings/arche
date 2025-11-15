@@ -57,5 +57,19 @@ SCENARIO("TimingService basic ticking, pause and resume", "[timing]") {
                 CHECK(timing.elapsed() >= 0.0f);
             }
         }
+
+        WHEN("start and stop control paused state") {
+            timing.stop();
+            CHECK(timing.isPaused());
+
+            timing.start();
+            CHECK_FALSE(timing.isPaused());
+
+            timing.setPaused(true);
+            CHECK(timing.isPaused());
+
+            timing.setPaused(false);
+            CHECK_FALSE(timing.isPaused());
+        }
     }
 }

@@ -9,14 +9,14 @@
 
 #include <IPanel.h>
 #include <WorldSystem.h>
-#include "UIContext.h"
+#include "EditorSession.h"
 
 namespace Arche {
     namespace GUI {
 
         class WorldProperties : public IPanel {
           public:
-            explicit WorldProperties(std::shared_ptr<UIContext> contextIn)
+            explicit WorldProperties(std::shared_ptr<EditorSession> contextIn)
                 : context{contextIn}, name{"World Properties"} {}
 
             void Draw() override;
@@ -25,7 +25,7 @@ namespace Arche {
           private:
 
             std::string name;
-            std::shared_ptr<UIContext> context;
+            std::shared_ptr<EditorSession> context;
         };
 
     } // namespace GUI

@@ -7,7 +7,7 @@
 
 #include <Camera.h>
 #include <CameraController.h>
-#include <UIContext.h>
+#include <EditorSession.h>
 #include <WorldSystem.h>
 
 #include <algorithm>
@@ -34,7 +34,7 @@ namespace {
 namespace Arche {
     namespace GUI {
 
-        Viewport3DPanel::Viewport3DPanel(std::shared_ptr<Arche::GUI::UIContext> panelContext)
+        Viewport3DPanel::Viewport3DPanel(std::shared_ptr<Arche::GUI::EditorSession> panelContext)
             : name{"3DViewport"}, context(std::move(panelContext)),
               cameraController{std::make_shared<CameraController>()}, m_gizmoSystem{std::make_unique<GizmoSystem>()} {}
 

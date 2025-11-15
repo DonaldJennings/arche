@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-#include "UIContext.h"
+#include "EditorSession.h"
 #include <IPanel.h>
 #include <WorldSystem.h>
 
@@ -16,7 +16,7 @@ namespace Arche {
 
         class EntityInspector : public IPanel {
           public:
-            explicit EntityInspector(std::shared_ptr<UIContext> contextIn)
+            explicit EntityInspector(std::shared_ptr<EditorSession> contextIn)
                 : context{contextIn}, name{"Entity Inspector"} {}
 
             void Draw() override;
@@ -24,7 +24,7 @@ namespace Arche {
 
           private:
             std::string name;
-            std::shared_ptr<UIContext> context;
+            std::shared_ptr<EditorSession> context;
         };
 
     } // namespace GUI

@@ -27,18 +27,20 @@ float TimingService::elapsed() const {
     return total.count();
 }
 
-void TimingService::reset() {
+void TimingService::reset(bool paused) {
     startTime_ = Clock::now();
     lastFrameTime_ = startTime_;
+    pauseStartTime_ = startTime_;
     pausedAccumulated_ = Duration::zero();
     deltaTime_ = 0.0f;
-    paused_ = false;
+    paused_ = paused;
 }
 
 void TimingService::pause() {
     if (paused_) return;
     pauseStartTime_ = Clock::now();
     paused_ = true;
+    deltaTime_ = 0.0f;
     ARCHE_LOG_INFO(logger_, "TimingService paused at elapsed time: " + std::to_string(elapsed()) + " seconds");
 }
 
@@ -51,4 +53,20 @@ void TimingService::resume() {
     paused_ = false;
 
     ARCHE_LOG_INFO(logger_, "TimingService resumed at elapsed time: " + std::to_string(elapsed()) + " seconds");
+}
+
+void TimingService::setPaused(bool paused) {
+    if (paused) {
+        pause();
+    } else {
+        resume();
+    }
+}
+
+void TimingService::start() {
+    reset(false);
+}
+
+void TimingService::stop() {
+    reset(true);
 }

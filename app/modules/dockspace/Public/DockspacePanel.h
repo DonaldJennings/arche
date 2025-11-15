@@ -1,6 +1,6 @@
 #pragma once
 
-#include "UIContext.h"
+#include "EditorSession.h"
 #include <IPanel.h>
 #include <memory>
 #include <string>
@@ -11,14 +11,14 @@ namespace Arche {
     namespace GUI {
         class DockspacePanel : public IPanel {
           public:
-            explicit DockspacePanel(std::shared_ptr<UIContext> contextIn);
+            explicit DockspacePanel(std::shared_ptr<EditorSession> contextIn);
 
             void Draw() override;
             std::string_view GetName() const override;
 
           private:
             std::string name;
-            std::shared_ptr<UIContext> context;
+            std::shared_ptr<EditorSession> context;
         };
     } // namespace GUI
 } // namespace Arche

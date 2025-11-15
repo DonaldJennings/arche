@@ -40,7 +40,8 @@ static std::filesystem::path GetExecutableDir() {
 namespace Arche {
     namespace GUI {
 
-        DockspacePanel::DockspacePanel(std::shared_ptr<UIContext> contextIn) : name{"Dockspace"}, context(std::move(contextIn)) {}
+        DockspacePanel::DockspacePanel(std::shared_ptr<EditorSession> contextIn)
+            : name{"Dockspace"}, context(std::move(contextIn)) {}
 
         void DockspacePanel::Draw() {
             ImGuiIO &io = ImGui::GetIO();

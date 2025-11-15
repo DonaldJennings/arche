@@ -8,21 +8,21 @@
 #include <glm/glm.hpp>
 #include "GizmoSystem.h"
 #include "CameraController.h"
-#include "UIContext.h"
+#include "EditorSession.h"
 #include "Camera.h"
 
 namespace Arche {
     namespace GUI {
         class Viewport3DPanel : public IPanel {
           public:
-            explicit Viewport3DPanel(std::shared_ptr<Arche::GUI::UIContext> panelContext);
+            explicit Viewport3DPanel(std::shared_ptr<Arche::GUI::EditorSession> panelContext);
 
             void Draw() override;
             std::string_view GetName() const override;
 
           private:
             std::string name;
-            std::shared_ptr<Arche::GUI::UIContext> context;
+            std::shared_ptr<Arche::GUI::EditorSession> context;
             std::shared_ptr<CameraController> cameraController;
             std::shared_ptr<Arche::Render::Camera> attachedCamera;
             std::unique_ptr<Arche::GUI::GizmoSystem> m_gizmoSystem;

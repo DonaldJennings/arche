@@ -49,6 +49,9 @@ namespace Arche {
         EngineCore::EngineCore() {
             loggingService = std::make_shared<LoggingService>();
             timingService = std::make_shared<TimingService>(loggingService);
+            if (timingService) {
+                timingService->stop();
+            }
             globalSettings = std::make_shared<GlobalSettings>();
             assetsPath = (GetExecutableDir() / "assets").string();
         }
@@ -79,18 +82,30 @@ namespace Arche {
             renderingSystem->addRenderPass(std::make_shared<Render::GeometryPass>());
             renderingSystem->addRenderPass(std::make_shared<Render::DebugPass>());
 
+            simulationState = SimulationState::Idle;
+            simulationSnapshotCaptured = false;
+
             ARCHE_LOG_INFO(loggingService, "Engine Core Initialised.");
-            timingService->tick(); // Initial tick to set start time
+            if (timingService) {
+                timingService->stop();
+                timingService->tick(); // Initial tick to set start time
+            }
         }
 
         void EngineCore::tick() {
-            timingService->tick();
-            double dt = timingService->deltaTime();
+            double dt = 0.0;
+            if (timingService) {
+                timingService->tick();
+                dt = timingService->deltaTime();
+            }
 
-            worldSystem->update(dt);
+            const double simulationDt = simulationState == SimulationState::Running ? dt : 0.0;
+            if (worldSystem) {
+                worldSystem->update(simulationDt);
+            }
 
             // Render the world
-            if (renderingSystem) {
+            if (renderingSystem && worldSystem) {
                 renderingSystem->render(*worldSystem, globalSettings->getRenderSettings());
             }
         }
@@ -104,6 +119,60 @@ namespace Arche {
             if (physicsSystem)
                 physicsSystem->shutdown();
             ARCHE_LOG_INFO(loggingService, "Engine Core Shutdown Complete.");
+        }
+
+        void EngineCore::toggleSimulation() {
+            if (simulationState == SimulationState::Running) {
+                pauseSimulation();
+            } else {
+                playSimulation();
+            }
+        }
+
+        void EngineCore::playSimulation() {
+            if (!worldSystem || !timingService)
+                return;
+
+            if (simulationState == SimulationState::Running)
+                return;
+
+            if (!simulationSnapshotCaptured) {
+                worldSystem->saveInitialState();
+                simulationSnapshotCaptured = true;
+            }
+
+            if (simulationState == SimulationState::Idle) {
+                timingService->start();
+            } else if (simulationState == SimulationState::Paused) {
+                timingService->resume();
+            }
+
+            simulationState = SimulationState::Running;
+        }
+
+        void EngineCore::pauseSimulation() {
+            if (!timingService)
+                return;
+
+            if (simulationState != SimulationState::Running)
+                return;
+
+            timingService->pause();
+            simulationState = SimulationState::Paused;
+        }
+
+        void EngineCore::resetSimulation() {
+            if (timingService) {
+                timingService->stop();
+            }
+
+            if (simulationSnapshotCaptured && worldSystem) {
+                worldSystem->restoreInitialState();
+                worldSystem->clearInitialState();
+            }
+
+            simulationSnapshotCaptured = false;
+            simulationState = SimulationState::Idle;
         }
 
     } // namespace Core
