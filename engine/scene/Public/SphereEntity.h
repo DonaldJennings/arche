@@ -41,6 +41,11 @@ namespace Arche {
 
             std::string_view getMeshId() override { return m_renderable->getMeshName(); };
             std::string_view getMaterialId() override { return m_renderable->getMaterialName(); };
+            void setMaterialId(std::string_view materialId) override {
+                if (m_renderable) {
+                    m_renderable->setMaterialName(std::string(materialId));
+                }
+            }
             std::string_view getShaderId() override { return m_renderable->getMaterialName(); };
 
             std::string_view getName() const override { return m_name; };
@@ -64,7 +69,7 @@ namespace Arche {
 
             std::shared_ptr<Physics::RigidBody> m_rigidBody;
             std::shared_ptr<Physics::ICollider> m_collider;
-            std::shared_ptr<Render::IRenderable> m_renderable;
+            std::shared_ptr<Render::NamedRenderable> m_renderable;
         };
     } // namespace Scene
 } // namespace Arche

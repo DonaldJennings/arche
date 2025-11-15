@@ -20,6 +20,8 @@ namespace Arche {
                 : m_meshName(std::move(meshName)), m_materialName(std::move(materialName)) {}
             std::string_view getMeshName() const override { return m_meshName; }
             std::string_view getMaterialName() const override { return m_materialName; }
+            void setMaterialName(std::string materialName) { m_materialName = std::move(materialName); }
+            void setMeshName(std::string meshName) { m_meshName = std::move(meshName); }
           private:
             std::string m_meshName;
             std::string m_materialName;

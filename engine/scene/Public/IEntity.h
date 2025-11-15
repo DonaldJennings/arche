@@ -35,6 +35,7 @@ namespace Arche {
 
             virtual std::string_view getMeshId() = 0;
             virtual std::string_view getMaterialId() = 0;
+            virtual void setMaterialId(std::string_view materialId) = 0;
             virtual std::string_view getShaderId() = 0;
             
             virtual std::string_view getName() const = 0;
