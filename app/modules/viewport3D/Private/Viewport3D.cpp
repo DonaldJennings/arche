@@ -160,8 +160,15 @@ namespace Arche {
                 attachedCamera = camera;
             }
 
+            bool mouseOverAnyWindow = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow);
+
+            if (mouseOverAnyWindow && !ImGui::IsWindowHovered()) {
+                // Mouse is over *another* window (like color picker)
+                return; // Do not process viewport input
+            }
+
             bool hoveringCanvas = ImGui::IsMouseHoveringRect(canvasP0, canvasP1, true);
-            bool allowControl = !ImGui::IsAnyItemActive();
+            bool allowControl = !ImGui::IsAnyItemActive() && !ImGui::IsAnyItemHovered() && ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
 
             if (hoveringCanvas && allowControl) {
                 // Pan / rotate with mouse
@@ -362,10 +369,14 @@ namespace Arche {
             // Draw render output
             DrawBackgroundAndRenderer(canvasP0, canvasP1, canvasSize, drawList, camera);
 
-            // Mouse state
+            // Mouse/hover gating that respects other ImGui windows/popups (e.g., color picker)
             ImVec2 mousePos = ImGui::GetIO().MousePos;
-            bool mouseLeftClick =
-                ImGui::IsMouseClicked(ImGuiMouseButton_Left) && ImRect(canvasP0, canvasP1).Contains(mousePos);
+            const bool viewportWindowHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+            const bool mouseOverCanvas = ImGui::IsMouseHoveringRect(canvasP0, canvasP1, true);
+            const bool uiBlocking = ImGui::IsAnyItemActive() || ImGui::IsAnyItemHovered();
+            const bool viewportInteractable = viewportWindowHovered && mouseOverCanvas && !uiBlocking;
+
+            bool mouseLeftClick = viewportInteractable && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
 
             glm::dmat4 viewMatrix = camera->GetViewMatrix();
             glm::dmat4 projectionMatrix = camera->GetProjectionMatrix();
@@ -449,8 +460,8 @@ namespace Arche {
                 return;
 
             bool hoveringCanvas =
-                ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem) &&
-                ImRect(canvasP0, ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y)).Contains(mousePos);
+                ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows) &&
+                ImGui::IsMouseHoveringRect(canvasP0, ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y));
 
             // Open the context menu when right clicking inside the viewport
             if (hoveringCanvas && ImGui::IsMouseReleased(ImGuiMouseButton_Right))

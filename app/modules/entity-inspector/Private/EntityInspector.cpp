@@ -115,10 +115,15 @@ namespace Arche {
                             }
                         };
 
-                        glm::vec4 baseColor = editableMaterial->getBaseColor();
-                        if (ImGui::ColorEdit4("Base Color", glm::value_ptr(baseColor),
-                                              ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float)) {
-                            ensureOverrideAndUpdate([&](Render::Material &mat) { mat.setBaseColor(baseColor); });
+                        std::optional<glm::vec3> baseColor = editableMaterial->getVec3("uAlbedo");
+                        if (!baseColor.has_value()) {
+                            ImGui::TextUnformatted("Material missing 'uAlbedo' parameter.");
+                        } else {
+                            if (ImGui::ColorEdit3("Base Color", glm::value_ptr(baseColor.value()),
+                                                  ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_Float)) {
+                                ensureOverrideAndUpdate(
+                                    [&](Render::Material &mat) { mat.setVec3("uAlbedo", baseColor.value()); });
+                            }
                         }
 
                         float pointSize = editableMaterial->getPointSize();
@@ -132,7 +137,8 @@ namespace Arche {
                                 float value = entry.second;
                                 ImGui::PushID(entry.first.c_str());
                                 if (ImGui::DragFloat("##value", &value, 0.01f)) {
-                                    ensureOverrideAndUpdate([&](Render::Material &mat) { mat.setFloat(entry.first, value); });
+                                    ensureOverrideAndUpdate(
+                                        [&](Render::Material &mat) { mat.setFloat(entry.first, value); });
                                 }
                                 ImGui::SameLine();
                                 ImGui::TextUnformatted(entry.first.c_str());
@@ -147,7 +153,8 @@ namespace Arche {
                                 glm::vec3 value = entry.second;
                                 ImGui::PushID(entry.first.c_str());
                                 if (ImGui::DragFloat3("##value", glm::value_ptr(value), 0.01f)) {
-                                    ensureOverrideAndUpdate([&](Render::Material &mat) { mat.setVec3(entry.first, value); });
+                                    ensureOverrideAndUpdate(
+                                        [&](Render::Material &mat) { mat.setVec3(entry.first, value); });
                                 }
                                 ImGui::SameLine();
                                 ImGui::TextUnformatted(entry.first.c_str());
@@ -162,7 +169,8 @@ namespace Arche {
                                 glm::vec4 value = entry.second;
                                 ImGui::PushID(entry.first.c_str());
                                 if (ImGui::DragFloat4("##value", glm::value_ptr(value), 0.01f)) {
-                                    ensureOverrideAndUpdate([&](Render::Material &mat) { mat.setVec4(entry.first, value); });
+                                    ensureOverrideAndUpdate(
+                                        [&](Render::Material &mat) { mat.setVec4(entry.first, value); });
                                 }
                                 ImGui::SameLine();
                                 ImGui::TextUnformatted(entry.first.c_str());

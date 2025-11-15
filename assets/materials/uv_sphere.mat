@@ -1,5 +1,5 @@
 shader = PBR
-uAlbedo    = 0.2, 0.4, 0.9
+uAlbedo    = 0.2, 0.4, 0.9 1.0
 uMetallic  = 0.0
 uRoughness = 0.4
 uAO        = 1.0

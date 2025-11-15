@@ -55,6 +55,7 @@ namespace Arche {
             std::shared_ptr<IEntity> clone() const override {
                 auto cloned{std::make_shared<SphereEntity>(m_radius, m_position)};
                 cloned->setID(m_id);
+                cloned->setMaterialId(m_renderable->getMaterialName());
                 return cloned;
             }
 

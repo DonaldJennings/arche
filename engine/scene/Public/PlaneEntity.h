@@ -67,6 +67,7 @@ namespace Arche {
                 cloned->setRotation(m_Rotation);
                 cloned->setScale(m_Scale);
                 cloned->setID(m_id);
+                cloned->setMaterialId(m_Renderable->getMaterialName());
                 return cloned;
             }
 
