@@ -273,171 +273,48 @@ namespace Arche {
             }
         }
 
-        // Helper: context menu (Add Particle Here)
-        void Viewport3DPanel::HandleContextMenu(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
-                                                const ImVec2 &mousePos, std::shared_ptr<Arche::Render::Camera> camera) {
-            auto worldSystem = context->worldSystem();
-            if (!worldSystem)
-                return;
-
-            if (ImGui::IsWindowHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
-                ImGui::OpenPopup("ViewportContextMenu");
-            }
-
-            if (ImGui::BeginPopup("ViewportContextMenu")) {
-                if (ImGui::BeginMenu("Add...")) {
-
-                    // Build world ray from cursor (canvas-relative)
-                    glm::dmat4 viewM = camera->GetViewMatrix();
-                    glm::dmat4 projM = camera->GetProjectionMatrix();
-                    glm::dmat4 invVP = glm::inverse(projM * viewM);
-
-                    // Normalized device coordinates
-                    double ndcX = ((mousePos.x - canvasP0.x) / canvasSize.x) * 2.0 - 1.0;
-                    double ndcY = 1.0 - ((mousePos.y - canvasP0.y) / canvasSize.y) * 2.0;
-
-                    glm::dvec4 nearP = invVP * glm::dvec4(ndcX, ndcY, -1.0, 1.0);
-                    glm::dvec4 farP = invVP * glm::dvec4(ndcX, ndcY, 1.0, 1.0);
-                    nearP /= nearP.w;
-                    farP /= farP.w;
-
-                    glm::dvec3 rayOrigin = camera->GetPosition();
-                    glm::dvec3 rayDir = glm::normalize(glm::dvec3(farP - nearP));
-
-                    // Intersect with ground plane Y = 0 (fallback to fixed distance if behind/parallel)
-                    glm::dvec3 spawnWorldPos;
-                    {
-                        double planeY = 0.0;
-                        double denom = rayDir.y;
-                        if (std::abs(denom) > 1e-6) {
-                            double t = (planeY - rayOrigin.y) / denom;
-                            if (t > 0.0) {
-                                spawnWorldPos = rayOrigin + rayDir * t;
-                            } else {
-                                spawnWorldPos = rayOrigin + rayDir * 20.0;
-                            }
-                        } else {
-                            spawnWorldPos = rayOrigin + rayDir * 20.0;
-                        }
-                    }
-
-                    if (ImGui::MenuItem("Sphere")) {
-                        auto sphere = std::make_shared<Scene::SphereEntity>(10.0f, spawnWorldPos);
-                        worldSystem->addEntity(sphere);
-                    }
-                    if (ImGui::MenuItem("Cube")) {
-                        auto cube = std::make_shared<Scene::CubeEntity>(glm::vec3(10.f), spawnWorldPos);
-                        worldSystem->addEntity(cube);
-                    }
-                    if (ImGui::MenuItem("Plane")) {
-                        // Horizontal plane at clicked point
-                        auto plane = std::make_shared<Scene::PlaneEntity>(glm::vec3(0.0f, 1.0f, 0.0f),
-                                                                          static_cast<float>(spawnWorldPos.y));
-                        plane->setPosition(glm::vec3(spawnWorldPos)); // keep X/Z from click
-                        plane->setScale(glm::vec3(10.0f));            // size in your mesh units
-                        worldSystem->addEntity(plane);
-                    }
-                    if (ImGui::MenuItem("Light")) {
-                        ARCHE_LOG_WARNING(context->logger(), "Lights are not yet implemented.");
-                    }
-
-                    ImGui::EndMenu();
-                }
-
-                ImGui::EndPopup();
-            }
-        }
-
         // Helper: draw camera overlay in top-left of viewport
         void Viewport3DPanel::DrawCameraOverlay(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
                                                 std::shared_ptr<Arche::Render::Camera> camera) {
-            // Prepare position text
-            glm::dvec3 camPos = camera->GetPosition();
-            double pitch = camera->GetPitch();
-            double yaw = camera->GetYaw();
-            double distance = 0.0;
-            if (cameraController)
-                distance = cameraController->getDistance();
+            const float margin = 8.0f;
+            ImVec2 overlayPos = ImVec2(canvasP0.x + margin, canvasP0.y + margin);
 
-            std::ostringstream oss;
-            oss << std::fixed << std::setprecision(2);
+            // A tiny overlay window positioned inside the viewport
+            ImGui::SetNextWindowPos(overlayPos, ImGuiCond_Always);
+            ImGui::SetNextWindowBgAlpha(0.55f);
+            ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration |
+                                     ImGuiWindowFlags_AlwaysAutoResize |
+                                     ImGuiWindowFlags_NoSavedSettings |
+                                     ImGuiWindowFlags_NoFocusOnAppearing |
+                                     ImGuiWindowFlags_NoNav |
+                                     ImGuiWindowFlags_NoMove;
 
-            std::string lineTitle = "Camera";
-            oss.str("");
-            oss.clear();
-            oss << "Pos: (" << std::fixed << std::setprecision(2) << camPos.x << ", " << camPos.y << ", " << camPos.z
-                << ")";
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 6.0f);
+            if (ImGui::Begin("Viewport Controls##3DOverlay", nullptr, flags)) {
+                // Play/Pause toggle button with state-reflecting text
+                bool paused = context->simulationIsPaused();
+                const char* playPauseLabel = paused ? "Play" : "Pause";
+                if (ImGui::Button(playPauseLabel)) {
+                    context->toggleSimulationState();
+                }
+                ImGui::SameLine();
 
-            std::string linePos = oss.str();
-            oss.str("");
-            oss.clear();
-            oss << "Pitch: " << std::fixed << std::setprecision(1) << pitch << " deg   Yaw: " << yaw << " deg";
+                // Reset world button
+                if (ImGui::Button("Reset")) {
+                    auto ws = context->worldSystem();
+                    if (ws) ws->reset();
+                }
 
-            std::string lineAng = oss.str();
-            oss.str("");
-            oss.clear();
-            std::string lineDist = oss.str();
+                // Optional: small state text
+                ImGui::SameLine();
+                ImGui::TextDisabled(paused ? "(Paused)" : "(Running)");
 
-            std::vector<std::string> lines{lineTitle, linePos, lineAng, lineDist};
-
-            // Layout + style
-            ImGuiIO &io3 = ImGui::GetIO();
-            float dpiScale3 = io3.DisplayFramebufferScale.x;
-            if (!(dpiScale3 > 0.0f))
-                dpiScale3 = 1.0f;
-            float uiScale3 = dpiScale3;
-
-            // Padding and metrics
-            ImVec2 padding{8.0f * uiScale3, 6.0f * uiScale3};
-
-            float baseFontSize = ImGui::GetFontSize();
-            float lineHeight = ImGui::GetTextLineHeight() * 0.95f;
-
-            float widest = 0.0f;
-            for (const auto &l : lines) {
-                ImVec2 ts = ImGui::CalcTextSize(l.c_str());
-                if (ts.x > widest)
-                    widest = ts.x;
+                // Camera info (kept minimal)
+                glm::dvec3 camPos = camera->GetPosition();
+                ImGui::Text("Pos: (%.2f, %.2f, %.2f)", camPos.x, camPos.y, camPos.z);
             }
-            float boxW = widest + padding.x * 2.0f;
-            float boxH = static_cast<float>(lines.size()) * lineHeight + padding.y * 2.0f;
-
-            // Position the overlay inside the viewport (top-left with small margin)
-            ImVec2 boxMin = ImVec2(canvasP0.x + 8.0f * uiScale3, canvasP0.y + 8.0f * uiScale3);
-            ImVec2 boxMax = ImVec2(boxMin.x + boxW, boxMin.y + boxH);
-
-            // Draw clipped to viewport
-            ImDrawList *dl = ImGui::GetWindowDrawList();
-            dl->PushClipRect(canvasP0, ImVec2(canvasP0.x + canvasSize.x, canvasP0.y + canvasSize.y), true);
-
-            // Background and border
-            ImU32 bgCol = IM_COL32(20, 24, 28, 220);
-            ImU32 borderCol = IM_COL32(110, 120, 130, 200);
-            ImU32 titleCol = IM_COL32(220, 220, 220, 230);
-            ImU32 textCol = IM_COL32(200, 200, 200, 220);
-
-            float rounding = 6.0f * uiScale3;
-            dl->AddRectFilled(boxMin, boxMax, bgCol, rounding);
-            dl->AddRect(boxMin, boxMax, borderCol, rounding, 0, 1.0f * uiScale3);
-
-            // Draw title with slightly bolder color and a subtle separator
-            ImVec2 textPos = ImVec2(boxMin.x + padding.x, boxMin.y + padding.y);
-            dl->AddText(ImGui::GetFont(), baseFontSize * 1.0f, textPos, titleCol, lines[0].c_str());
-            // Separator line
-            float sepY = textPos.y + lineHeight;
-            dl->AddLine(ImVec2(boxMin.x + padding.x * 0.5f, sepY + 4.0f * uiScale3),
-                        ImVec2(boxMax.x - padding.x * 0.5f, sepY + 4.0f * uiScale3), IM_COL32(120, 120, 130, 80),
-                        1.0f * uiScale3);
-
-            // Remaining lines
-            float y = sepY + 8.0f * uiScale3;
-            for (size_t i = 1; i < lines.size(); ++i) {
-                ImVec2 tp = ImVec2(boxMin.x + padding.x, y);
-                dl->AddText(ImGui::GetFont(), baseFontSize * 0.9f, tp, textCol, lines[i].c_str());
-                y += lineHeight;
-            }
-
-            dl->PopClipRect();
+            ImGui::End();
+            ImGui::PopStyleVar();
         }
 
         void Viewport3DPanel::Draw() {
@@ -484,10 +361,8 @@ namespace Arche {
             // Camera input handling (pan/rotate/zoom/move)
             HandleCameraInput(canvasP0, canvasP1, canvasSize, camera);
 
-            // Context menu (Add Particle)
-            HandleContextMenu(canvasP0, canvasSize, mousePos, camera);
 
-            DrawCameraViewGizmo(canvasP0, canvasSize, camera, drawList);
+            DrawCameraViewGizmo(canvasP0, canvasP1, camera, drawList);
 
             // Gizmo updates
             if (selectedBodyId) {

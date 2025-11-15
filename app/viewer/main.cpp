@@ -23,6 +23,7 @@
 #include <MetricsPanel.h>
 #include <MaterialBrowser.h>
 #include <ShaderBrowser.h>
+#include <EntityInspector.h>
 #include <PanelRegistry.h>
 #include <WorldProperties.h>
 
@@ -67,6 +68,7 @@ int main() {
         panels.RegisterPanel(std::make_shared<Arche::GUI::WorldProperties>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::MaterialBrowser>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::ShaderBrowser>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::EntityInspector>(context));
 
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
