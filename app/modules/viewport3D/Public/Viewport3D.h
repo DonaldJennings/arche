@@ -47,6 +47,9 @@ namespace Arche {
 
             void DrawCameraViewGizmo(const ImVec2 &canvasP0, const ImVec2 &canvasSize,
                                      std::shared_ptr<Arche::Render::Camera> camera, ImDrawList *drawList);  
+        
+            void HandleContextMenu(const ImVec2 &canvasP0, const ImVec2 &canvasSize, const ImVec2 &mousePos,
+                                   std::shared_ptr<Arche::Render::Camera> camera);
         };
     } // namespace GUI
 } // namespace Arche

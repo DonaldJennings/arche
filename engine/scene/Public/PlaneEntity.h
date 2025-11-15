@@ -50,6 +50,12 @@ namespace Arche {
             const glm::vec3 &GetNormal() const { return m_Normal; }
             float GetDistance() const { return m_Distance; }
 
+            std::shared_ptr<IEntity> clone() const override {
+                auto cloned{std::make_shared<PlaneEntity>(m_Normal, m_Distance)};
+                cloned->setID(m_id);
+                return cloned;
+            }
+
           private:
             std::uint64_t m_id{};
 

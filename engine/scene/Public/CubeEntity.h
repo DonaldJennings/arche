@@ -50,6 +50,12 @@ namespace Arche {
 
             const glm::vec3 &GetHalfExtents() const { return m_HalfExtents; }
 
+            std::shared_ptr<IEntity> clone() const override {
+                auto cloned{std::make_shared<CubeEntity>(m_HalfExtents, m_Position)};
+                cloned->setID(m_id);
+                return cloned;
+            }
+
           private:
             std::uint64_t m_id{};
 

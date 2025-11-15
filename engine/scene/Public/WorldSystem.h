@@ -111,18 +111,25 @@ namespace Arche {
             }
 
             void reset() {
-                m_entityMap.clear();
-                m_nextEntityID = 1;
+                if (!m_entityMap.empty()) {
+                    m_entityMap.clear();
+                }
+                restoreInitialState();
                 if (m_physicsSystem) {
                     m_physicsSystem->reset();
                 }
             }
+
+            void saveInitialState();
+            void restoreInitialState();
 
             std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysicsSystem() const { return m_physicsSystem; }
 
           private:
             std::uint64_t m_nextEntityID{1};
             std::unordered_map<std::uint64_t, std::shared_ptr<IEntity>> m_entityMap;
+
+            std::vector<std::shared_ptr<IEntity>> m_initialState;
             std::shared_ptr<Physics::PhysicsSystem> m_physicsSystem;
             std::shared_ptr<Arche::Core::LoggingService> m_logger;
         };

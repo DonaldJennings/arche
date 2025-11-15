@@ -47,6 +47,12 @@ namespace Arche {
             std::uint64_t getID() const override { return m_id; };
             void setID(std::uint64_t id) override { m_id = id; };
 
+            std::shared_ptr<IEntity> clone() const override {
+                auto cloned{std::make_shared<SphereEntity>(m_radius, m_position)};
+                cloned->setID(m_id);
+                return cloned;
+            }
+
           private:
             // Internal data members for position, rotation, scale, rigid body, collider, and renderable
             std::uint64_t m_id{};

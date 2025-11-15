@@ -106,7 +106,7 @@ namespace Arche {
             const float gizmoSize = 0.15f * glm::length(objectPosition - glm::vec3(camera->GetPosition()));
             const float handleThickness = 4.0f;
             const float arrowheadSize = 10.0f;
-            const float hitDistanceThreshold = 12.0f;
+            const float hitDistanceThreshold = 20.0f;
 
             glm::vec3 axes[] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
             ImU32 colors[] = {IM_COL32(255, 50, 50, 255), IM_COL32(50, 255, 50, 255), IM_COL32(50, 50, 255, 255)};

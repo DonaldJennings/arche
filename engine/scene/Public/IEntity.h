@@ -38,6 +38,8 @@ namespace Arche {
             virtual std::string_view getShaderId() = 0;
             
             virtual std::string_view getName() const = 0;
+            
+            virtual std::shared_ptr<IEntity> clone() const = 0;
         };
     } // namespace Scene
 } // namespace Arche

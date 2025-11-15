@@ -10,31 +10,56 @@ namespace Arche {
 
         struct UIContext {
           private:
-            std::shared_ptr<Arche::Core::EngineCore> engineCore;
+            std::shared_ptr<Core::EngineCore> engineCore;
+            std::optional<std::uint64_t> selectedEntityID;
+            std::optional<std::uint64_t> hoveredEntityID;
+
+            bool m_simulationPaused = true;
+            bool m_simulationHasStarted = false;
 
           public:
-            UIContext(std::shared_ptr<Arche::Core::EngineCore> engineIn) : engineCore{engineIn} {};
+            UIContext(std::shared_ptr<Core::EngineCore> engineIn) : engineCore{engineIn} {}
 
-            std::shared_ptr<Arche::Core::LoggingService> logger() const { return engineCore->getLogger(); }
+            auto logger() const { return engineCore->getLogger(); }
+            auto renderer() const { return engineCore->getRenderer(); }
+            auto worldSystem() const { return engineCore->getWorld(); }
+            auto &globalSettings() const { return engineCore->getGlobalSettings(); }
 
-            std::shared_ptr<Arche::Render::RenderingSystem> renderer() const { return engineCore->getRenderer(); }
-
-            std::shared_ptr<Arche::Scene::WorldSystem> worldSystem() const { return engineCore->getWorld(); }
-
-            void pauseSimulation() { engineCore->getTimer()->pause(); };
-            void runSimulation() { engineCore->getTimer()->resume(); };
-            bool simulationIsPaused() const { return engineCore->getTimer()->isPaused(); };
+            bool simulationIsPaused() const { return m_simulationPaused; }
 
             void toggleSimulationState() {
+                if (m_simulationPaused) {
+                    if (!m_simulationHasStarted) {
+                        engineCore->getWorld()->saveInitialState(); // SAVE ONLY ON FIRST PLAY
+                        m_simulationHasStarted = true;
+                    }
 
-                if (simulationIsPaused()) {
                     engineCore->getTimer()->resume();
+                    m_simulationPaused = false;
                 } else {
                     engineCore->getTimer()->pause();
+                    m_simulationPaused = true;
                 }
-            };
+            }
 
-            Core::GlobalSettings &globalSettings() const { return engineCore->getGlobalSettings(); };
+            void resetSimulationState() {
+                engineCore->getTimer()->reset();
+                engineCore->getWorld()->restoreInitialState();
+
+                m_simulationPaused = true;
+                m_simulationHasStarted = false;
+            }
+
+            // Selection:
+            void setSelectedEntity(std::optional<uint64_t> id) { selectedEntityID = id; }
+            void clearSelectedEntity() { selectedEntityID.reset(); }
+            std::optional<uint64_t> getSelectedEntity() const { return selectedEntityID; }
+
+            // Hover:
+            void setHoveredEntity(std::optional<uint64_t> id) { hoveredEntityID = id; }
+            void clearHoveredEntity() { hoveredEntityID.reset(); }
+            std::optional<uint64_t> getHoveredEntity() const { return hoveredEntityID; }
         };
+
     } // namespace GUI
 } // namespace Arche

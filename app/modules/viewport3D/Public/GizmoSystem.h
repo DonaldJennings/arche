@@ -41,6 +41,10 @@ namespace Arche {
             void draw(ImDrawList* drawList, std::shared_ptr<Render::Camera> camera, const ImVec2& viewportPos, const ImVec2& viewportSize, const glm::vec3& objectPosition);
 
             bool isDragging() const { return m_isDragging; }
+            bool isHoveringHandle() const { return m_hoveredAxis != GizmoAxis::None; }
+
+            void GizmoSystem::resetHoverState() { m_hoveredAxis = GizmoAxis::None; }
+
             void setMode(GizmoMode mode) { m_mode = mode; }
 
         private:
