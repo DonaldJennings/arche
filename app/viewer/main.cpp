@@ -10,16 +10,19 @@
 
 #include <EngineCore.h>
 #include <LoggingService.h>
-#include <TimingService.h>
-#include <UIContext.h>
+#include <EditorSession.h>
 #include <WorldSystem.h>
 #include <Camera.h> // Include the Camera header
+
 
 #include <DockspacePanel.h>
 #include <GUILogSink.h>
 #include <ImGuiBackend.h>
 #include <LogPanel.h>
 #include <MetricsPanel.h>
+#include <MaterialBrowser.h>
+#include <ShaderBrowser.h>
+#include <EntityInspector.h>
 #include <PanelRegistry.h>
 #include <WorldProperties.h>
 
@@ -48,8 +51,8 @@ int main() {
         mainCamera->SetPosition({0.0, 5.0, 20.0});
         engineCore->getRenderer()->setMainCamera(mainCamera);
 
-        // 4. Create UIContext and pass references to services and WorldSystem
-        auto context = std::make_shared<Arche::GUI::UIContext>(engineCore);
+        // 4. Create the editor session wrapper around core engine services
+        auto context = std::make_shared<Arche::GUI::EditorSession>(engineCore);
 
         // 5. Setup GUI backend and panel registry
         Arche::GUI::PanelRegistry panels;
@@ -62,6 +65,9 @@ int main() {
         panels.RegisterPanel(std::make_shared<Arche::GUI::MetricsPanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::Viewport3DPanel>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::WorldProperties>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::MaterialBrowser>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::ShaderBrowser>(context));
+        panels.RegisterPanel(std::make_shared<Arche::GUI::EntityInspector>(context));
 
         auto guiRunner = Arche::GUI::GUIRunner(window);
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
@@ -69,7 +75,7 @@ int main() {
         engineCore->getWorld()->addEntity(
             std::make_shared<Arche::Scene::SphereEntity>(2.50f, glm::vec3(0.0f, 10.0f, -15.0f)));
 
-        engineCore->getTimer()->pause();
+        engineCore->resetSimulation();
         
         // 6. Main loop
         while (!glfwWindowShouldClose(*window)) {

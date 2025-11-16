@@ -18,6 +18,7 @@ namespace Arche {
             explicit Material(std::string name) : m_name(std::move(name)) {}
 
             const std::string& getName() const { return m_name; }
+            void setName(std::string name) { m_name = std::move(name); }
             // Common parameters you can extend as needed
             void setBaseColor(const glm::vec4& c) { m_baseColor = c; }
             const glm::vec4& getBaseColor() const { return m_baseColor; }
@@ -41,6 +42,36 @@ namespace Arche {
 
             void setVec4(std::string name, glm::vec4 v) { m_vec4s[std::move(name)] = v; }
             const std::unordered_map<std::string, glm::vec4>& getVec4s() const { return m_vec4s; }
+
+            std::optional<float> getFloat(std::string name) {
+                auto it = m_floats.find(name);
+                if (it != m_floats.end()) {
+                    return it->second;
+                }
+                return std::nullopt;
+            }
+
+            std::optional<glm::vec3> getVec3(std::string name) {
+                auto it = m_vec3s.find(name);
+                if (it != m_vec3s.end()) {
+                    return it->second;
+                }
+                return std::nullopt;
+            }
+
+            std::optional<glm::vec4> getVec4(std::string name) {
+                auto it = m_vec4s.find(name);
+                if (it != m_vec4s.end()) {
+                    return it->second;
+                }
+                return std::nullopt;
+            }
+
+            std::shared_ptr<Material> cloneWithName(std::string newName) const {
+                auto copy = std::make_shared<Material>(*this);
+                copy->m_name = std::move(newName);
+                return copy;
+            }
 
           private:
             std::string m_name;

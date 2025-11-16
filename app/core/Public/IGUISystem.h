@@ -5,7 +5,7 @@
 #include <memory>
 
 #include "IPanel.h"
-#include "UIContext.h"
+#include "EditorSession.h"
 
 namespace Arche {
     namespace GUI {

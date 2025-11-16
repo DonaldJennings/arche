@@ -9,7 +9,7 @@
 
 #include <IPanel.h>
 #include <WorldSystem.h>
-#include "UIContext.h"
+#include "EditorSession.h"
 
 namespace Arche {
     namespace GUI {
@@ -52,7 +52,7 @@ namespace Arche {
 
         class MetricsPanel : public IPanel {
           public:
-            explicit MetricsPanel(std::shared_ptr<UIContext> contextIn);
+            explicit MetricsPanel(std::shared_ptr<EditorSession> contextIn);
 
             void Draw() override;
             std::string_view GetName() const override;
@@ -92,7 +92,7 @@ namespace Arche {
             void *dxgiAdapter3_{nullptr};
 
             std::string name;
-            std::shared_ptr<UIContext> context;
+            std::shared_ptr<EditorSession> context;
         };
 
     } // namespace GUI

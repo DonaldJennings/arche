@@ -39,6 +39,11 @@ namespace Arche {
 
             std::string_view getMeshId() override { return m_Renderable->getMeshName(); }
             std::string_view getMaterialId() override { return m_Renderable->getMaterialName(); }
+            void setMaterialId(std::string_view materialId) override {
+                if (m_Renderable) {
+                    m_Renderable->setMaterialName(std::string(materialId));
+                }
+            }
             std::string_view getShaderId() override { return "flat.color"; }
 
             // --- Identification ---
@@ -49,6 +54,14 @@ namespace Arche {
             std::string_view getName() const override { return m_name; }
 
             const glm::vec3 &GetHalfExtents() const { return m_HalfExtents; }
+
+            std::shared_ptr<IEntity> clone() const override {
+                auto cloned{std::make_shared<CubeEntity>(m_HalfExtents, m_Position)};
+                cloned->setID(m_id);
+                cloned->setMaterialId(m_Renderable->getMaterialName());
+
+                return cloned;
+            }
 
           private:
             std::uint64_t m_id{};

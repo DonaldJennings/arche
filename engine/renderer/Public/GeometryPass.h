@@ -44,7 +44,6 @@ namespace Arche {
                 for (const auto &pair : material.getVec4s()) {
                     backend.setUniformVec4(pair.first.c_str(), pair.second);
                 }
-                // If you support textures in Material, bind them here (albedo/roughness/metallic/normal, etc.)
             }
 
             void drawEntity(std::shared_ptr<Scene::IEntity> entity, const ResourceRegistry &resources,

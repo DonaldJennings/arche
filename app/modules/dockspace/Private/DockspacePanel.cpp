@@ -40,7 +40,8 @@ static std::filesystem::path GetExecutableDir() {
 namespace Arche {
     namespace GUI {
 
-        DockspacePanel::DockspacePanel(std::shared_ptr<UIContext> contextIn) : name{"Dockspace"}, context(std::move(contextIn)) {}
+        DockspacePanel::DockspacePanel(std::shared_ptr<EditorSession> contextIn)
+            : name{"Dockspace"}, context(std::move(contextIn)) {}
 
         void DockspacePanel::Draw() {
             ImGuiIO &io = ImGui::GetIO();
@@ -143,44 +144,6 @@ namespace Arche {
             ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(10, 10));
 
             const float childHeight = 60.0f * dpiScale;
-            ImGui::BeginChild("SimulationToolbar", ImVec2(0, childHeight), false, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoDecoration);
-
-            ImVec2 btnSize(140.0f * dpiScale, 42.0f * dpiScale);
-
-            // Center the buttons horizontally and vertically in the child
-            ImVec2 avail = ImGui::GetContentRegionAvail();
-            float availW = avail.x;
-            ImGuiStyle &style = ImGui::GetStyle();
-            const int btnCount = 4;
-            float spacing = style.ItemSpacing.x;
-            float totalButtonsW = btnCount * btnSize.x + (btnCount - 1) * spacing;
-            float startX = (availW - totalButtonsW) * 0.5f;
-            if (startX < 0.0f)
-                startX = 0.0f;
-            ImGui::SetCursorPosX(startX);
-
-            float startY = (childHeight - btnSize.y) * 0.5f;
-            if (startY > 0.0f)
-                ImGui::SetCursorPosY(startY);
-
-            // Large buttons for Play, Pause, Step, Reset (centered)
-            if (ImGui::Button("Play", btnSize)) {
-                if (context)
-                    context->runSimulation();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Pause", btnSize)) {
-                if (context)
-                    context->pauseSimulation();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Reset", btnSize)) {
-                if (context) {
-                    context->worldSystem()->reset();
-                }
-            }
-
-            ImGui::EndChild();
             ImGui::PopStyleVar(2);
 
             ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");

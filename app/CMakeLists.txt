@@ -11,10 +11,11 @@ add_subdirectory(backends/imgui)
 add_subdirectory(modules/dockspace)
 add_subdirectory(modules/log)
 add_subdirectory(modules/metrics)
-
 add_subdirectory(modules/viewport3D)
-
 add_subdirectory(modules/world-properties)
+add_subdirectory(modules/material-browser)
+add_subdirectory(modules/shader-browser)
+add_subdirectory(modules/entity-inspector)
 
 add_library(arche-gui-bundle INTERFACE)
 
@@ -26,6 +27,9 @@ target_link_libraries(arche-gui-bundle INTERFACE
     arche::gui-panel-metrics
     arche::gui-panel-viewport3D
     arche::gui-panel-world-properties
+    arche::gui-panel-material-browser
+    arche::gui-panel-shader-browser
+    arche::gui-panel-entity-inspector
     arche::imgui
 )
 

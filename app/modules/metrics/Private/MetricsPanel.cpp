@@ -34,7 +34,7 @@ namespace Arche {
         }
 #endif
 
-        MetricsPanel::MetricsPanel(std::shared_ptr<UIContext> contextIn)
+        MetricsPanel::MetricsPanel(std::shared_ptr<EditorSession> contextIn)
             : name{"Metrics"}, context(std::move(contextIn)),
               cpuBuffer_(120), memBuffer_(120), netBuffer_(120), gpuBuffer_(120)
         {

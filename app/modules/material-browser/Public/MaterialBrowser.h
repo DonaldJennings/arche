@@ -1,24 +1,32 @@
 #pragma once
 
-#include "EditorSession.h"
-#include <IPanel.h>
-#include <memory>
 #include <string>
+#include <memory>
 #include <string_view>
-#include <Theme.h>
+#include <vector>
+#include <chrono>
+#include <cstdint>
+
+#include <IPanel.h>
+#include <WorldSystem.h>
+#include "EditorSession.h"
 
 namespace Arche {
     namespace GUI {
-        class DockspacePanel : public IPanel {
+
+        class MaterialBrowser : public IPanel {
           public:
-            explicit DockspacePanel(std::shared_ptr<EditorSession> contextIn);
+            explicit MaterialBrowser(std::shared_ptr<EditorSession> contextIn)
+                : context{contextIn}, name{"Material Browser"} {}
 
             void Draw() override;
             std::string_view GetName() const override;
 
           private:
+
             std::string name;
             std::shared_ptr<EditorSession> context;
         };
+
     } // namespace GUI
 } // namespace Arche

@@ -28,6 +28,8 @@ namespace Arche {
 
         class EngineCore {
           public:
+            enum class SimulationState { Idle, Running, Paused };
+
             EngineCore();
             ~EngineCore();
 
@@ -42,6 +44,14 @@ namespace Arche {
             std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysics() const { return physicsSystem; }
             GlobalSettings& getGlobalSettings() { return *globalSettings; }
 
+            void toggleSimulation();
+            void playSimulation();
+            void pauseSimulation();
+            void resetSimulation();
+            SimulationState getSimulationState() const { return simulationState; }
+            bool simulationIsRunning() const { return simulationState == SimulationState::Running; }
+            bool simulationIsPaused() const { return simulationState != SimulationState::Running; }
+
           private:
             std::shared_ptr<Arche::Core::LoggingService> loggingService;
             std::shared_ptr<Arche::Core::TimingService> timingService;
@@ -53,6 +63,8 @@ namespace Arche {
             std::shared_ptr<Render::MaterialLoader> materialLoader;
 
             std::filesystem::path assetsPath;
+            SimulationState simulationState{SimulationState::Idle};
+            bool simulationSnapshotCaptured{false};
         };
 
     } // namespace Core

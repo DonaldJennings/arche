@@ -2,6 +2,7 @@
 #include "PlaneCollider.h"
 #include "IEntity.h"
 #include <glm/glm.hpp>
+#include <memory>
 
 namespace Arche {
 
@@ -19,7 +20,16 @@ namespace Arche {
             // --- Transform ---
             glm::vec3 getPosition() const override { return m_Position; }
             glm::vec3 *getPositionPtr() override { return &m_Position; }
-            void setPosition(const glm::vec3 &pos) override { m_Position = pos; }
+            void setPosition(const glm::vec3 &pos) override {
+                m_Position = pos;
+                m_Distance = glm::dot(m_Normal, m_Position);
+
+                if (m_Collider) {
+                    if (auto planeCollider = std::dynamic_pointer_cast<Physics::PlaneCollider>(m_Collider)) {
+                        planeCollider->SetDistance(m_Distance);
+                    }
+                }
+            }
 
             glm::vec3 getRotation() const override { return m_Rotation; }
             void setRotation(const glm::vec3 &rot) override { m_Rotation = rot; }
@@ -29,15 +39,16 @@ namespace Arche {
 
             // --- Lifecycle ---
             void update(double deltaTime) override {
-                // Static entity — no per-frame updates
+                // Static entity -- no per-frame updates
             }
 
             // --- Components ---
             std::shared_ptr<Physics::RigidBody> getRigidBody() override { return m_Rigidbody; }
             std::shared_ptr<Physics::ICollider> getCollider() override { return m_Collider; }
             
-            std::string_view getMeshId() override { return "plane.mesh"; }
-            std::string_view getMaterialId() override { return "plane.mat"; }
+            std::string_view getMeshId() override { return m_meshName; }
+            std::string_view getMaterialId() override { return m_materialName; }
+            void setMaterialId(std::string_view materialId) override { m_materialName = std::string(materialId); }
             std::string_view getShaderId() override { return "flat.color"; }
 
             // --- Identification ---
@@ -49,6 +60,16 @@ namespace Arche {
 
             const glm::vec3 &GetNormal() const { return m_Normal; }
             float GetDistance() const { return m_Distance; }
+
+            std::shared_ptr<IEntity> clone() const override {
+                auto cloned{std::make_shared<PlaneEntity>(m_Normal, glm::dot(m_Normal, m_Position))};
+                cloned->setPosition(m_Position);
+                cloned->setRotation(m_Rotation);
+                cloned->setScale(m_Scale);
+                cloned->setID(m_id);
+                cloned->setMaterialId(m_Renderable->getMaterialName());
+                return cloned;
+            }
 
           private:
             std::uint64_t m_id{};
@@ -63,6 +84,8 @@ namespace Arche {
             std::shared_ptr<Physics::ICollider> m_Collider;
             std::shared_ptr<Render::IRenderable> m_Renderable;
             std::shared_ptr<Physics::RigidBody> m_Rigidbody;
+            std::string m_meshName{"plane.mesh"};
+            std::string m_materialName{"plane.mat"};
         };
     } // namespace Scene
 } // namespace Arche
