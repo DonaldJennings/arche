@@ -6,8 +6,29 @@
 
 namespace Arche {
     namespace Scene {
+        /**
+         * @brief Entity representing a spherical object in the world.
+         * 
+         * SphereEntity is a concrete implementation of IEntity for ball-shaped
+         * objects. It includes a sphere collider and rigid body for physics
+         * simulation, and uses a UV sphere mesh for rendering.
+         * 
+         * Spheres are ideal for projectiles, particles, and other round objects
+         * due to their simple collision detection and uniform shape.
+         */
         class SphereEntity : public IEntity {
           public:
+            /**
+             * @brief Construct a sphere entity.
+             * 
+             * Creates a sphere with the specified radius and position. Optionally
+             * enables physics simulation. When physics is disabled, the sphere
+             * becomes static (immovable).
+             * 
+             * @param radius Radius of the sphere
+             * @param position Initial world position
+             * @param physicsEnabled If true, enables gravity; if false, makes static
+             */
             SphereEntity(float radius, glm::vec3 position, bool physicsEnabled = true)
                 : m_radius{radius}, m_position{position}, m_rotation{0.0f, 0.0f, 0.0f}, m_scale(radius) {
                 // Initialize the collider as a sphere collider
@@ -33,6 +54,14 @@ namespace Arche {
             void setScale(const glm::vec3 &scale) override { m_scale = scale; };
 
             // Updating entity state
+            /**
+             * @brief Update the sphere entity for one frame.
+             * 
+             * Currently a no-op for spheres. Override to add sphere-specific
+             * behavior like spin animation or state updates.
+             * 
+             * @param deltaTime Time since last frame in seconds
+             */
             void update(double deltaTime) override {};
 
             // Getters for other systems
@@ -52,6 +81,11 @@ namespace Arche {
             std::uint64_t getID() const override { return m_id; };
             void setID(std::uint64_t id) override { m_id = id; };
 
+            /**
+             * @brief Create a deep copy of this sphere entity.
+             * 
+             * @return Shared pointer to the cloned sphere with same properties
+             */
             std::shared_ptr<IEntity> clone() const override {
                 auto cloned{std::make_shared<SphereEntity>(m_radius, m_position)};
                 cloned->setID(m_id);
@@ -61,16 +95,16 @@ namespace Arche {
 
           private:
             // Internal data members for position, rotation, scale, rigid body, collider, and renderable
-            std::uint64_t m_id{};
-            std::string m_name{"sphere"};
-            glm::vec3 m_position;
-            glm::vec3 m_rotation;
-            glm::vec3 m_scale;
-            float m_radius;
+            std::uint64_t m_id{};                                       ///< Unique entity ID
+            std::string m_name{"sphere"};                               ///< Entity name
+            glm::vec3 m_position;                                       ///< World position
+            glm::vec3 m_rotation;                                       ///< Euler rotation (degrees)
+            glm::vec3 m_scale;                                          ///< Scale factors
+            float m_radius;                                             ///< Sphere radius
 
-            std::shared_ptr<Physics::RigidBody> m_rigidBody;
-            std::shared_ptr<Physics::ICollider> m_collider;
-            std::shared_ptr<Render::NamedRenderable> m_renderable;
+            std::shared_ptr<Physics::RigidBody> m_rigidBody;           ///< Physics body
+            std::shared_ptr<Physics::ICollider> m_collider;            ///< Collision shape
+            std::shared_ptr<Render::NamedRenderable> m_renderable;     ///< Rendering component
         };
     } // namespace Scene
 } // namespace Arche

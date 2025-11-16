@@ -6,6 +6,23 @@ namespace Arche
 {
     namespace GUI
     {
+        /**
+         * @brief Apply a dark theme to the ImGui interface.
+         * 
+         * Configures ImGui's visual style with a modern dark color scheme.
+         * The theme uses muted grays with a teal accent color for highlights
+         * and interactive elements.
+         * 
+         * Features:
+         * - Dark background with subtle variations for panels
+         * - Rounded corners for modern appearance
+         * - High contrast text for readability
+         * - Teal accent color for buttons and active states
+         * - Minimalist, professional aesthetic
+         * 
+         * @param bStyleDark_ Currently unused parameter (reserved for future use)
+         * @param alpha_ Global alpha multiplier for all UI elements (0.0-1.0)
+         */
         inline void setDarkTheme(bool bStyleDark_, float alpha_)
         {
             ImGuiStyle &style = ImGui::GetStyle();

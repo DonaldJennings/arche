@@ -8,12 +8,42 @@
 namespace Arche {
     namespace Render {
 
+        /**
+         * @brief Main render pass for drawing scene geometry.
+         * 
+         * GeometryPass is responsible for rendering all opaque objects in the scene
+         * with full lighting and materials. It applies the camera view/projection,
+         * sets up lighting parameters, configures shadow mapping, and draws each
+         * entity with its associated mesh and material.
+         * 
+         * This is typically the main rendering pass that produces the visible
+         * scene content. It runs after shadow and sky passes.
+         */
         class GeometryPass : public IRenderPass {
           public:
+            /**
+             * @brief Initialize the geometry pass.
+             * 
+             * Sets up any resources needed for geometry rendering.
+             * 
+             * @param backend Reference to the rendering backend
+             */
             void initialise(IRenderBackend &backend) override {
                 // Initialization code for the geometry pass
             }
 
+            /**
+             * @brief Render all opaque geometry with lighting.
+             * 
+             * Applies camera matrices, then iterates through all opaque objects,
+             * drawing each with its material and applying global lighting.
+             * 
+             * @param view Scene view with camera and objects to render
+             * @param backend Reference to the rendering backend
+             * @param camera Camera for this frame
+             * @param resources Resource registry for meshes/materials/shaders
+             * @param settings Global rendering and shadow settings
+             */
             void render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
                         ResourceRegistry &resources, RenderPassSettings &settings) override {
 
@@ -26,11 +56,27 @@ namespace Arche {
                 }
             }
 
+            /**
+             * @brief Shutdown the geometry pass.
+             * 
+             * Releases any resources allocated by the geometry pass.
+             * 
+             * @param backend Reference to the rendering backend
+             */
             void shutdown(IRenderBackend &backend) override {
                 // Cleanup code for the geometry pass
             }
 
           private:
+            /**
+             * @brief Upload custom material properties to shader uniforms.
+             * 
+             * Applies all float, vec3, and vec4 parameters defined in the
+             * material to the currently bound shader.
+             * 
+             * @param backend Reference to the rendering backend
+             * @param material Material containing custom properties
+             */
             void uploadMaterialProperties(IRenderBackend &backend, const Material &material) {
                 // Floats
                 for (const auto &pair : material.getFloats()) {
@@ -46,6 +92,19 @@ namespace Arche {
                 }
             }
 
+            /**
+             * @brief Draw a single entity with lighting and shadows.
+             * 
+             * Fetches the entity's mesh and material, binds the appropriate shader,
+             * sets up lighting and shadow uniforms, computes the model matrix,
+             * and issues the draw call.
+             * 
+             * @param entity Entity to render
+             * @param resources Resource registry for lookups
+             * @param backend Reference to the rendering backend
+             * @param settings Rendering settings (lighting, shadows)
+             * @param cameraPos Camera position for lighting calculations
+             */
             void drawEntity(std::shared_ptr<Scene::IEntity> entity, const ResourceRegistry &resources,
                             IRenderBackend &backend, RenderPassSettings &settings, glm::vec3 cameraPos) {
                 if (!entity) return;
