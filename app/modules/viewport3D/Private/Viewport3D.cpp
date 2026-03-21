@@ -61,7 +61,8 @@ namespace Arche {
                     // Immediately render current world into new framebuffer so UI samples valid pixels
                     auto worldSystem = context->worldSystem();
                     if (worldSystem) {
-                        context->renderer()->render(*worldSystem, context->globalSettings().getRenderSettings());
+                        context->renderer()->render(worldSystem->buildRenderScene(),
+                                                    context->globalSettings().getRenderSettings());
                     }
                 }
 
@@ -227,7 +228,7 @@ namespace Arche {
                     cameraController->updateCamera();
 
                     if (context && context->renderer() && context->worldSystem()) {
-                        context->renderer()->render(*context->worldSystem(),
+                        context->renderer()->render(context->worldSystem()->buildRenderScene(),
                                                     context->globalSettings().getRenderSettings());
                     }
                 }

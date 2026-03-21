@@ -1,28 +1,16 @@
 #include <catch2/catch_test_macros.hpp>
 #include <EngineCore.h>
-#include <LoggingService.h>
 
-SCENARIO("EngineCore subsystem loop calls update on subsystems", "[core]") {
+SCENARIO("EngineCore simulation state machine", "[core]") {
     using namespace Arche::Core;
 
-    class DummySubsystem : public ISubsystem {
-    public:
-        int updates{0};
-        void initialise() override {}
-        void update(double) override { ++updates; }
-        void shutdown() override {}
-    };
+    GIVEN("a freshly constructed EngineCore") {
+        EngineCore engine;
 
-    GIVEN("an EngineCore with a dummy subsystem") {
-        auto engine = std::make_shared<EngineCore>();
-        auto dummy = std::make_shared<DummySubsystem>();
-        engine->registerSubsystem(dummy);
-
-        WHEN("update is called") {
-            engine->update();
-            THEN("the subsystem update was invoked") {
-                CHECK(dummy->updates == 1);
-            }
+        THEN("simulation starts in Idle state") {
+            CHECK(engine.getSimulationState() == EngineCore::SimulationState::Idle);
+            CHECK(engine.simulationIsPaused());
+            CHECK_FALSE(engine.simulationIsRunning());
         }
     }
 }

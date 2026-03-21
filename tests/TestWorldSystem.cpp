@@ -5,6 +5,7 @@
 #include <PlaneEntity.h>
 #include <LoggingService.h>
 #include <TimingService.h>
+#include <GlobalSettings.h>
 #include <PhysicsSystem.h>
 #include <glm/glm.hpp>
 #include <memory>
@@ -15,9 +16,10 @@ static std::shared_ptr<Arche::Core::LoggingService> makeLogger() { return std::m
 static std::shared_ptr<Arche::Core::TimingService> makeTiming(std::shared_ptr<Arche::Core::LoggingService> l){ return std::make_shared<Arche::Core::TimingService>(l); }
 
 SCENARIO("WorldSystem manages entities and forwards updates", "[worldsystem]") {
-    auto logger = makeLogger();
-    auto timing = makeTiming(logger);
-    auto physics = std::make_shared<Arche::Physics::PhysicsSystem>(logger);
+    auto logger   = makeLogger();
+    auto timing   = makeTiming(logger);
+    auto settings = std::make_shared<Arche::Core::GlobalSettings>();
+    auto physics  = std::make_shared<Arche::Physics::PhysicsSystem>(logger, settings);
     auto world = std::make_shared<WorldSystem>(logger, timing);
     world->setPhysics(physics);
 
