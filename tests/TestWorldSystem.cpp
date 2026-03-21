@@ -31,7 +31,7 @@ SCENARIO("WorldSystem manages entities and forwards updates", "[worldsystem]") {
             auto id1 = world->addEntity(e1);
             auto id2 = world->addEntity(e2);
 
-            REQUIRE(world->getPhysicsSystem()->getBodies().size() == world->view().bodies.size());
+            REQUIRE(world->getPhysicsSystem()->getEntityIds().size() == world->view().bodies.size());
 
             THEN("they appear in the view and have ids") {
                 auto v2 = world->view();

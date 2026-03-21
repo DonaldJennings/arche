@@ -34,13 +34,12 @@ namespace Arche {
                   m_Renderable{std::make_shared<Render::NamedRenderable>("cube.mesh", "cube.mat")} {
                 if (physicsEnabled) {
                     m_Rigidbody = std::make_shared<Physics::RigidBody>(1.0f);
-                    m_Collider = std::make_shared<Physics::CubeCollider>(halfExtents, &m_Position);
+                    m_Collider = std::make_shared<Physics::CubeCollider>(halfExtents);
                 }
             }
 
             // --- Transform ---
             glm::vec3 getPosition() const override { return m_Position; }
-            glm::vec3 *getPositionPtr() override { return &m_Position; }
             void setPosition(const glm::vec3 &pos) override { m_Position = pos; }
 
             glm::vec3 getRotation() const override { return m_Rotation; }

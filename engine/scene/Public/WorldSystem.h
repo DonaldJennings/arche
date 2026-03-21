@@ -3,7 +3,9 @@
 #include <ISubsystem.h>
 #include <LoggingService.h>
 #include <PhysicsSystem.h>
+#include <RenderScene.h>
 #include <TimingService.h>
+#include <glm/gtc/matrix_transform.hpp>
 #include <memory>
 #include <optional>
 
@@ -12,279 +14,179 @@ namespace Arche {
 
         /**
          * @brief View snapshot of the world state.
-         * 
-         * Provides a read-only view of all entities in the world at a
-         * specific moment. Used by rendering and other systems that need
-         * to iterate over all entities.
          */
         class WorldSystemView {
           public:
-            std::vector<std::shared_ptr<IEntity>> bodies;  ///< List of all entities
+            std::vector<std::shared_ptr<IEntity>> bodies;
         };
 
         /**
          * @brief Snapshot of an entity's state for save/restore.
-         * 
-         * Stores the entity ID and a prototype clone for restoring the
-         * world to a previous state (e.g., simulation reset).
          */
         struct EntitySnapshot {
-            std::uint64_t id{0};                    ///< Entity ID
-            std::shared_ptr<IEntity> prototype;     ///< Cloned entity state
+            std::uint64_t id{0};
+            std::shared_ptr<IEntity> prototype;
         };
 
         /**
          * @brief Main scene management subsystem.
-         * 
-         * WorldSystem manages all entities in the game world. It handles
-         * entity creation, deletion, updates, and property modifications.
-         * The system also supports state snapshots for simulation replay/reset.
-         * 
-         * WorldSystem coordinates with the PhysicsSystem to ensure entities
-         * with physics components are properly simulated. It assigns unique
-         * IDs to all entities and maintains them in an efficient lookup table.
-         * 
-         * Key features:
-         * - Entity lifecycle management (add, remove, update)
-         * - State snapshot and restoration for simulation reset
-         * - Integration with physics simulation
-         * - Property update methods for common entity modifications
+         *
+         * Manages entity lifecycle and coordinates with PhysicsSystem.
+         * After each physics step, positions are synced from the physics SoA
+         * back to entities. Each frame, WorldSystem builds a RenderScene for
+         * the renderer without exposing WorldSystem itself to the render layer.
          */
         class WorldSystem : public Core::ISubsystem {
           public:
-            /**
-             * @brief Construct the world system.
-             * 
-             * @param logger Shared pointer to logging service
-             * @param timing Shared pointer to timing service
-             */
             WorldSystem(std::shared_ptr<Arche::Core::LoggingService> logger,
                         std::shared_ptr<Arche::Core::TimingService> timing);
 
-            /**
-             * @brief Initialize the world system.
-             * 
-             * Currently a no-op as the world system doesn't require
-             * initialization beyond construction.
-             */
-            void initialise() override {};
+            void initialise() override {}
 
             /**
-             * @brief Update all entities and physics for one frame.
-             * 
-             * Updates the physics system first, then updates each entity's
-             * internal state. The delta time is passed through to both systems.
-             * 
-             * @param dt Time elapsed since last update in seconds
+             * @brief Tick physics, sync positions back to entities, then update entities.
+             * @param dt Frame delta time in seconds
              */
             void update(double dt) override {
                 if (m_physicsSystem) {
                     m_physicsSystem->update(dt);
+
+                    // Sync physics-owned positions back to entities
+                    const auto &ids = m_physicsSystem->getEntityIds();
+                    const auto &pos = m_physicsSystem->getPositions();
+                    for (std::size_t i = 0; i < ids.size(); ++i) {
+                        auto it = m_entityMap.find(ids[i]);
+                        if (it != m_entityMap.end())
+                            it->second->setPosition(pos[i]);
+                    }
                 }
 
-                for (const auto &[id, entity] : m_entityMap) {
+                for (const auto &[id, entity] : m_entityMap)
                     entity->update(dt);
-                }
             }
 
-            /**
-             * @brief Shutdown the world system.
-             * 
-             * Clears all entities from the world. Should be called before
-             * destroying the world system.
-             */
             void shutdown() override { m_entityMap.clear(); }
 
-            /**
-             * @brief Set the physics system to use for simulation.
-             * 
-             * @param physicsSystem Shared pointer to the physics system
-             */
-            void setPhysics(std::shared_ptr<Physics::PhysicsSystem> physicsSystem) { m_physicsSystem = physicsSystem; }
+            void setPhysics(std::shared_ptr<Physics::PhysicsSystem> physicsSystem) {
+                m_physicsSystem = physicsSystem;
+            }
 
-            /**
-             * @brief Add a new entity to the world.
-             * 
-             * Assigns a unique ID to the entity and registers it for updates.
-             * If the entity has physics components, they are registered with
-             * the physics system.
-             * 
-             * @param entity Shared pointer to the entity to add
-             * @return The assigned unique entity ID
-             */
-            inline std::uint64_t addEntity(std::shared_ptr<IEntity> entity) { return insertEntity(std::move(entity)); }
+            inline std::uint64_t addEntity(std::shared_ptr<IEntity> entity) {
+                return insertEntity(std::move(entity));
+            }
 
-            /**
-             * @brief Remove all entities from the world.
-             * 
-             * Clears the entity map and resets the physics system. Useful
-             * for clearing the scene before loading a new one.
-             */
             inline void clearEntities() {
                 m_entityMap.clear();
-                if (m_physicsSystem) {
+                if (m_physicsSystem)
                     m_physicsSystem->reset();
-                }
             }
 
             /**
-             * @brief Remove a specific entity from the world.
-             * 
-             * @param entityID The ID of the entity to remove
-             * 
-             * @note This does not remove the physics body from the physics
-             *       system, which may cause issues. Consider using clearEntities
-             *       and re-adding entities instead.
+             * @brief Remove an entity and its physics body.
+             * @param entityID ID of the entity to remove
              */
-            inline void removeEntity(std::uint64_t entityID) { m_entityMap.erase(entityID); }
+            inline void removeEntity(std::uint64_t entityID) {
+                m_entityMap.erase(entityID);
+                if (m_physicsSystem)
+                    m_physicsSystem->removeBody(entityID);
+            }
 
-            /**
-             * @brief Get a view of all entities in the world.
-             * 
-             * Creates a snapshot of all current entities. The returned view
-             * is a copy and modifications to it won't affect the world.
-             * 
-             * @return WorldSystemView containing all entities
-             */
             inline WorldSystemView view() const {
-                WorldSystemView view;
-                for (const auto &entity : m_entityMap) {
-                    view.bodies.push_back(entity.second);
-                }
-                return view;
+                WorldSystemView v;
+                for (const auto &e : m_entityMap)
+                    v.bodies.push_back(e.second);
+                return v;
             }
 
             /**
-             * @brief Update an entity's position.
-             * 
-             * @param entityID The ID of the entity to update
-             * @param newPosition The new position to set
+             * @brief Build a RenderScene from the current entity map.
+             *
+             * Called by EngineCore each frame before rendering. The renderer
+             * receives only a RenderScene, so RenderingSystem has no dependency
+             * on WorldSystem.
              */
+            Render::RenderScene buildRenderScene() const {
+                Render::RenderScene scene;
+                scene.opaqueObjects.reserve(m_entityMap.size());
+                for (const auto &[id, entity] : m_entityMap) {
+                    Render::RenderObject obj;
+                    obj.meshId     = std::string(entity->getMeshId());
+                    obj.materialId = std::string(entity->getMaterialId());
+                    obj.transform  = glm::scale(
+                        glm::translate(glm::mat4(1.0f), entity->getPosition()),
+                        entity->getScale());
+                    scene.opaqueObjects.push_back(std::move(obj));
+                }
+                return scene;
+            }
+
+            // --- Property update helpers (used by editor panels) ---
+
             void updateEntityPosition(std::uint64_t entityID, const glm::vec3 &newPosition) {
                 auto it = m_entityMap.find(entityID);
-                if (it != m_entityMap.end()) {
-                    it->second->setPosition(newPosition);
-                }
+                if (it == m_entityMap.end()) return;
+                it->second->setPosition(newPosition);
+                if (m_physicsSystem)
+                    m_physicsSystem->setPosition(entityID, newPosition);
             }
 
-            /**
-             * @brief Update an entity's rigid body mass.
-             * 
-             * @param entityID The ID of the entity to update
-             * @param newMass The new mass value in kilograms
-             */
             void updateEntityMass(std::uint64_t entityID, float newMass) {
                 auto it = m_entityMap.find(entityID);
-                if (it != m_entityMap.end()) {
-                    auto rigidBody = it->second->getRigidBody();
-                    if (rigidBody) {
-                        rigidBody->setMass(newMass);
-                    }
-                }
+                if (it == m_entityMap.end()) return;
+                if (auto rb = it->second->getRigidBody())
+                    rb->setMass(newMass);
+                if (m_physicsSystem)
+                    m_physicsSystem->setMass(entityID, newMass);
             }
 
-            /**
-             * @brief Update an entity's scale.
-             * 
-             * @param entityID The ID of the entity to update
-             * @param newScale The new scale vector
-             */
             void updateEntityScale(std::uint64_t entityID, const glm::vec3 &newScale) {
                 auto it = m_entityMap.find(entityID);
-                if (it != m_entityMap.end()) {
+                if (it != m_entityMap.end())
                     it->second->setScale(newScale);
-                }
             }
 
-            /**
-             * @brief Update whether an entity is affected by gravity.
-             * 
-             * @param entityID The ID of the entity to update
-             * @param affected true to enable gravity, false to disable
-             */
             void updateEntityImpactedByGravity(std::uint64_t entityID, bool affected) {
                 auto it = m_entityMap.find(entityID);
-                if (it != m_entityMap.end()) {
-                    auto rigidBody = it->second->getRigidBody();
-                    if (rigidBody) {
-                        rigidBody->setUseGravity(affected);
-                    }
-                }
+                if (it == m_entityMap.end()) return;
+                if (auto rb = it->second->getRigidBody())
+                    rb->setUseGravity(affected);
+                if (m_physicsSystem)
+                    m_physicsSystem->setUseGravity(entityID, affected);
             }
 
-            /**
-             * @brief Update whether an entity is static (immovable).
-             * 
-             * @param entityID The ID of the entity to update
-             * @param isStatic true to make static, false to make dynamic
-             */
             void updateEntityStaticState(std::uint64_t entityID, bool isStatic) {
                 auto it = m_entityMap.find(entityID);
-                if (it != m_entityMap.end()) {
-                    auto rigidBody = it->second->getRigidBody();
-                    if (rigidBody) {
-                        rigidBody->setStatic(isStatic);
-                    }
-                }
+                if (it == m_entityMap.end()) return;
+                if (auto rb = it->second->getRigidBody())
+                    rb->setStatic(isStatic);
+                if (m_physicsSystem)
+                    m_physicsSystem->setIsStatic(entityID, isStatic);
             }
 
-            /**
-             * @brief Reset the world to its initial state.
-             * 
-             * Restores all entities to their saved snapshot state. If no
-             * snapshot exists, this has no effect.
-             */
             void reset() { restoreInitialState(); }
-
-            /**
-             * @brief Save the current state of all entities.
-             * 
-             * Creates a snapshot of the world that can be restored later.
-             * Used for simulation reset functionality.
-             */
             void saveInitialState();
-            
-            /**
-             * @brief Restore entities to the saved snapshot state.
-             * 
-             * Clears the current world and recreates all entities from the
-             * saved snapshot. If no snapshot exists, just clears the world.
-             */
             void restoreInitialState();
 
-            /**
-             * @brief Clear the saved state snapshot.
-             * 
-             * Frees memory used by the snapshot and resets the entity ID counter.
-             */
             void clearInitialState() {
                 m_initialState.clear();
                 m_initialNextEntityID = 1;
             }
 
-            /**
-             * @brief Get the physics system.
-             * @return Shared pointer to the physics system
-             */
-            std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysicsSystem() const { return m_physicsSystem; }
+            std::shared_ptr<Arche::Physics::PhysicsSystem> getPhysicsSystem() const {
+                return m_physicsSystem;
+            }
 
           private:
-            std::uint64_t m_nextEntityID{1};                                        ///< Next entity ID to assign
-            std::unordered_map<std::uint64_t, std::shared_ptr<IEntity>> m_entityMap;///< Entity lookup table
+            std::uint64_t m_nextEntityID{1};
+            std::unordered_map<std::uint64_t, std::shared_ptr<IEntity>> m_entityMap;
 
-            std::vector<EntitySnapshot> m_initialState;                             ///< Saved state snapshot
-            std::uint64_t m_initialNextEntityID{1};                                 ///< Saved ID counter
-            std::shared_ptr<Physics::PhysicsSystem> m_physicsSystem;               ///< Physics simulation
-            std::shared_ptr<Arche::Core::LoggingService> m_logger;                 ///< Logger service
+            std::vector<EntitySnapshot> m_initialState;
+            std::uint64_t m_initialNextEntityID{1};
+            std::shared_ptr<Physics::PhysicsSystem> m_physicsSystem;
+            std::shared_ptr<Arche::Core::LoggingService> m_logger;
 
-            /**
-             * @brief Internal method to insert an entity with optional ID.
-             * 
-             * @param entity The entity to insert
-             * @param forcedId Optional ID to use instead of auto-assigning
-             * @return The entity's ID (assigned or forced)
-             */
-            std::uint64_t insertEntity(std::shared_ptr<IEntity> entity, std::optional<std::uint64_t> forcedId = std::nullopt);
+            std::uint64_t insertEntity(std::shared_ptr<IEntity> entity,
+                                       std::optional<std::uint64_t> forcedId = std::nullopt);
         };
 
     } // namespace Scene

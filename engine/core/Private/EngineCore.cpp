@@ -104,9 +104,10 @@ namespace Arche {
                 worldSystem->update(simulationDt);
             }
 
-            // Render the world
+            // Build render scene and render
             if (renderingSystem && worldSystem) {
-                renderingSystem->render(*worldSystem, globalSettings->getRenderSettings());
+                auto scene = worldSystem->buildRenderScene();
+                renderingSystem->render(scene, globalSettings->getRenderSettings());
             }
         }
 

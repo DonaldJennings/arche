@@ -50,16 +50,6 @@ namespace Arche {
             virtual glm::vec3 getPosition() const = 0;
             
             /**
-             * @brief Get a pointer to the entity's position.
-             * 
-             * Used by physics and collision systems that need direct access
-             * to modify position efficiently.
-             * 
-             * @return Pointer to the position vector
-             */
-            virtual glm::vec3 *getPositionPtr() = 0;
-            
-            /**
              * @brief Set the entity's world position.
              * @param position New position in world space
              */

@@ -4,16 +4,18 @@
 
 namespace Arche {
     namespace Scene {
+
         WorldSystem::WorldSystem(std::shared_ptr<Arche::Core::LoggingService> logger,
                                  std::shared_ptr<Arche::Core::TimingService> timing)
             : m_logger(std::move(logger)) {}
 
-        std::uint64_t WorldSystem::insertEntity(std::shared_ptr<IEntity> entity, std::optional<std::uint64_t> forcedId) {
-            if (!entity) {
+        std::uint64_t WorldSystem::insertEntity(std::shared_ptr<IEntity> entity,
+                                                std::optional<std::uint64_t> forcedId) {
+            if (!entity)
                 return 0;
-            }
 
-            const std::uint64_t assignedId = forcedId.has_value() ? *forcedId : m_nextEntityID++;
+            const std::uint64_t assignedId =
+                forcedId.has_value() ? *forcedId : m_nextEntityID++;
             m_nextEntityID = std::max<std::uint64_t>(m_nextEntityID, assignedId + 1);
 
             entity->setID(assignedId);
@@ -21,10 +23,10 @@ namespace Arche {
 
             if (m_physicsSystem) {
                 Physics::PhysicsBody body;
-                body.rb = entity->getRigidBody();
+                body.entityId = assignedId;
+                body.rb       = entity->getRigidBody();
                 body.collider = entity->getCollider();
-                body.position = entity->getPositionPtr();
-
+                body.position = entity->getPosition(); // copy by value
                 m_physicsSystem->addBody(body);
             }
 
@@ -33,15 +35,12 @@ namespace Arche {
 
         void WorldSystem::saveInitialState() {
             m_initialState.clear();
-            auto view = this->view();
+            auto v = this->view();
 
-            for (auto &e : view.bodies) {
-                if (!e) {
-                    continue;
-                }
-
+            for (auto &e : v.bodies) {
+                if (!e) continue;
                 EntitySnapshot snapshot{};
-                snapshot.id = e->getID();
+                snapshot.id        = e->getID();
                 snapshot.prototype = e->clone();
                 m_initialState.push_back(std::move(snapshot));
             }
@@ -50,15 +49,13 @@ namespace Arche {
         }
 
         void WorldSystem::restoreInitialState() {
-            const std::uint64_t initialNextId = m_initialNextEntityID;
+            const std::uint64_t savedNextId = m_initialNextEntityID;
 
             clearEntities();
-            m_nextEntityID = initialNextId;
+            m_nextEntityID = savedNextId;
 
             for (auto &snapshot : m_initialState) {
-                if (!snapshot.prototype) {
-                    continue;
-                }
+                if (!snapshot.prototype) continue;
                 insertEntity(snapshot.prototype->clone(), snapshot.id);
             }
 

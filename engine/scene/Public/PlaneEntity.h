@@ -39,8 +39,7 @@ namespace Arche {
 
             // --- Transform ---
             glm::vec3 getPosition() const override { return m_Position; }
-            glm::vec3 *getPositionPtr() override { return &m_Position; }
-            
+
             /**
              * @brief Set the plane's position.
              * 

@@ -5,116 +5,163 @@
 #include <LoggingService.h>
 #include <GlobalSettings.h>
 #include <memory>
+#include <vector>
 
 namespace Arche {
     namespace Physics {
 
         /**
-         * @brief Container for a complete physics body.
-         * 
-         * Associates a rigid body (mass, velocity, forces) with a collider
-         * (shape) and position reference. This structure is used by the
-         * physics system to track and update physical objects.
+         * @brief Input descriptor for registering a body with PhysicsSystem.
+         *
+         * Used only as an argument to addBody(). Not stored internally;
+         * data is unpacked into the SoA arrays.
          */
         struct PhysicsBody {
-            std::shared_ptr<RigidBody> rb;      ///< Rigid body dynamics component
-            std::shared_ptr<ICollider> collider;///< Collision shape component
-            glm::vec3 *position;                ///< Pointer to the entity's position
+            std::uint64_t entityId{0};           ///< Owning entity ID
+            std::shared_ptr<RigidBody> rb;        ///< Initial physics properties
+            std::shared_ptr<ICollider> collider;  ///< Collision shape
+            glm::vec3 position{0.0f};             ///< Initial position (value, not pointer)
         };
 
         /**
          * @brief Main physics simulation subsystem.
-         * 
-         * PhysicsSystem manages the physics simulation for all dynamic objects
-         * in the world. It performs numerical integration of rigid body dynamics,
-         * applying gravity and other forces to update object positions and
-         * velocities over time.
-         * 
-         * The system uses a simple Euler integration scheme and retrieves gravity
-         * from the global settings. Bodies are integrated in parallel without
-         * collision resolution (collision detection is not yet fully implemented).
-         * 
-         * @note This subsystem implements the ISubsystem interface for lifecycle
-         *       management by the engine core.
+         *
+         * Stores all physics state as Structure-of-Arrays (SoA) for cache
+         * efficiency and direct mapping to future GPU storage buffers.
+         * Positions are owned by PhysicsSystem and synced back to entities
+         * by WorldSystem after each update.
          */
         class PhysicsSystem : public Arche::Core::ISubsystem {
           public:
-            /**
-             * @brief Construct the physics system.
-             * 
-             * @param logger Shared pointer to the logging service for diagnostics
-             * @param settings Shared pointer to global settings (for gravity, etc.)
-             */
-            PhysicsSystem(std::shared_ptr<Arche::Core::LoggingService> logger, std::shared_ptr<Core::GlobalSettings> settings) 
+            PhysicsSystem(std::shared_ptr<Arche::Core::LoggingService> logger,
+                          std::shared_ptr<Core::GlobalSettings> settings)
                 : m_logger(std::move(logger)), m_settings(std::move(settings)) {}
 
+            void initialise() override {}
+            void shutdown() override {}
+
             /**
-             * @brief Initialize the physics system.
-             * 
-             * Currently a no-op as the physics system doesn't require
-             * initialization beyond construction.
-             */
-            void initialise() override {};
-            
-            /**
-             * @brief Shutdown the physics system.
-             * 
-             * Releases any resources held by the physics system.
-             */
-            void shutdown() override {};
-            
-            /**
-             * @brief Update the physics simulation.
-             * 
-             * Integrates all registered physics bodies forward in time by deltaTime.
-             * Applies gravity from global settings and updates positions based on
-             * velocities and accelerations.
-             * 
-             * @param deltaTime Time step in seconds (0 when simulation is paused)
+             * @brief Integrate all dynamic bodies forward by deltaTime.
+             *
+             * Applies gravity, integrates velocity → position, resets acceleration.
+             * Static bodies are skipped.
+             *
+             * @param deltaTime Time step in seconds
              */
             void update(double deltaTime) override {
-                // Get gravity directly from global settings
-                const glm::vec3& gravity = m_settings->getWorldSettings().gravity;
+                const glm::vec3 gravity = m_settings->getWorldSettings().gravity;
+                const float dt = static_cast<float>(deltaTime);
 
-                // Integrate the physics world
-                for (PhysicsBody &body : m_bodies) {
-                    if (body.rb) {
-                        body.rb->integrate(deltaTime, *body.position, gravity);
-                    }
+                for (std::size_t i = 0; i < m_entityIds.size(); ++i) {
+                    if (m_isStatic[i])
+                        continue;
+
+                    if (m_useGravity[i])
+                        m_accelerations[i] += gravity;
+
+                    m_velocities[i]    += m_accelerations[i] * dt;
+                    m_positions[i]     += m_velocities[i]    * dt;
+                    m_accelerations[i]  = glm::vec3(0.0f);
                 }
             }
 
             /**
-             * @brief Remove all physics bodies from the simulation.
-             * 
-             * Clears the internal list of bodies. Typically called when
-             * resetting or clearing the world.
+             * @brief Register a new body. Data is unpacked into the SoA arrays.
+             * @param body Input descriptor with entity ID, RigidBody, and initial position.
              */
-            inline void reset() { m_bodies.clear(); }
+            void addBody(const PhysicsBody &body) {
+                m_entityIds.push_back(body.entityId);
+                m_positions.push_back(body.position);
+                m_velocities.push_back(body.rb ? body.rb->getVelocity()     : glm::vec3(0.0f));
+                m_accelerations.push_back(body.rb ? body.rb->getAcceleration() : glm::vec3(0.0f));
+                m_masses.push_back(body.rb ? body.rb->getMass()       : 1.0f);
+                m_isStatic.push_back(body.rb ? body.rb->isStatic()    : true);
+                m_useGravity.push_back(body.rb ? body.rb->isUsingGravity() : false);
+                m_colliders.push_back(body.collider);
+            }
 
             /**
-             * @brief Add a new physics body to the simulation.
-             * 
-             * Registers a body for physics integration. The body will be
-             * updated on every call to update().
-             * 
-             * @param body The physics body to add (position pointer must remain valid)
+             * @brief Remove the body associated with entityId (swap-and-pop, O(n)).
+             * @param entityId ID of the entity whose body should be removed.
              */
-            inline void addBody(const PhysicsBody &body) { m_bodies.push_back(body); }
+            void removeBody(std::uint64_t entityId) {
+                for (std::size_t i = 0; i < m_entityIds.size(); ++i) {
+                    if (m_entityIds[i] != entityId)
+                        continue;
 
-            /**
-             * @brief Get all physics bodies in the simulation.
-             * 
-             * @return Vector copy of all registered physics bodies
-             * 
-             * @note Returns a copy, not a reference. Modifying the returned
-             *       vector does not affect the internal state.
-             */
-            inline std::vector<PhysicsBody> getBodies() const { return m_bodies; }
+                    const std::size_t last = m_entityIds.size() - 1;
+                    m_entityIds[i]     = m_entityIds[last];
+                    m_positions[i]     = m_positions[last];
+                    m_velocities[i]    = m_velocities[last];
+                    m_accelerations[i] = m_accelerations[last];
+                    m_masses[i]        = m_masses[last];
+                    m_isStatic[i]      = m_isStatic[last];
+                    m_useGravity[i]    = m_useGravity[last];
+                    m_colliders[i]     = m_colliders[last];
+
+                    m_entityIds.pop_back();
+                    m_positions.pop_back();
+                    m_velocities.pop_back();
+                    m_accelerations.pop_back();
+                    m_masses.pop_back();
+                    m_isStatic.pop_back();
+                    m_useGravity.pop_back();
+                    m_colliders.pop_back();
+                    return;
+                }
+            }
+
+            /// Remove all bodies.
+            void reset() {
+                m_entityIds.clear();
+                m_positions.clear();
+                m_velocities.clear();
+                m_accelerations.clear();
+                m_masses.clear();
+                m_isStatic.clear();
+                m_useGravity.clear();
+                m_colliders.clear();
+            }
+
+            // --- SoA read accessors (used by WorldSystem to sync positions) ---
+            const std::vector<std::uint64_t>&            getEntityIds()    const { return m_entityIds; }
+            const std::vector<glm::vec3>&                getPositions()    const { return m_positions; }
+
+            // --- Property setters (editor / WorldSystem property updates) ---
+            void setPosition(std::uint64_t entityId, const glm::vec3 &pos) {
+                if (auto i = findIndex(entityId); i != npos) m_positions[i] = pos;
+            }
+            void setMass(std::uint64_t entityId, float mass) {
+                if (auto i = findIndex(entityId); i != npos) m_masses[i] = mass;
+            }
+            void setUseGravity(std::uint64_t entityId, bool useGravity) {
+                if (auto i = findIndex(entityId); i != npos) m_useGravity[i] = useGravity;
+            }
+            void setIsStatic(std::uint64_t entityId, bool isStatic) {
+                if (auto i = findIndex(entityId); i != npos) m_isStatic[i] = isStatic;
+            }
+
           private:
-            std::vector<PhysicsBody> m_bodies;                          ///< Active physics bodies
-            std::shared_ptr<Arche::Core::LoggingService> m_logger;     ///< Logger for diagnostics
-            std::shared_ptr<Core::GlobalSettings> m_settings;           ///< Global settings reference
+            static constexpr std::size_t npos = static_cast<std::size_t>(-1);
+
+            std::size_t findIndex(std::uint64_t entityId) const {
+                for (std::size_t i = 0; i < m_entityIds.size(); ++i)
+                    if (m_entityIds[i] == entityId) return i;
+                return npos;
+            }
+
+            // SoA physics data
+            std::vector<std::uint64_t>            m_entityIds;
+            std::vector<glm::vec3>                m_positions;
+            std::vector<glm::vec3>                m_velocities;
+            std::vector<glm::vec3>                m_accelerations;
+            std::vector<float>                    m_masses;
+            std::vector<bool>                     m_isStatic;
+            std::vector<bool>                     m_useGravity;
+            std::vector<std::shared_ptr<ICollider>> m_colliders;
+
+            std::shared_ptr<Arche::Core::LoggingService> m_logger;
+            std::shared_ptr<Core::GlobalSettings>        m_settings;
         };
 
     } // namespace Physics

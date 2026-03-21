@@ -32,7 +32,7 @@ namespace Arche {
             SphereEntity(float radius, glm::vec3 position, bool physicsEnabled = true)
                 : m_radius{radius}, m_position{position}, m_rotation{0.0f, 0.0f, 0.0f}, m_scale(radius) {
                 // Initialize the collider as a sphere collider
-                m_collider = std::make_shared<Physics::SphereCollider>(m_radius, &m_position);
+                m_collider = std::make_shared<Physics::SphereCollider>(m_radius);
                 // If physics is enabled, set up the rigid body
                 m_rigidBody = std::make_shared<Physics::RigidBody>(1.0f);
                 if (physicsEnabled) {
@@ -46,7 +46,6 @@ namespace Arche {
 
             // Getters and setters
             glm::vec3 getPosition() const override { return m_position; };
-            glm::vec3 *getPositionPtr() override { return &m_position; };
             void setPosition(const glm::vec3 &position) override { m_position = position; };
             glm::vec3 getRotation() const override { return m_rotation; };
             void setRotation(const glm::vec3 &rotation) override { m_rotation = rotation; };

@@ -49,22 +49,13 @@ namespace Arche::Render {
         backend.setShader(depthShader);
         backend.setUniformMat4("uLightSpaceMatrix", m_lightSpaceMatrix);
 
-        for (const auto &entity : view.opaqueObjects) {
-            if (!entity)
+        for (const auto &obj : view.opaqueObjects) {
+            auto mesh = resources.getMesh(obj.meshId);
+            if (!mesh)
                 continue;
 
-            glm::mat4 model{glm::translate(glm::mat4(1.0f), entity->getPosition())};
-            model = glm::scale(model, entity->getScale());
-
-            // We don't care about the material here: only mesh + model
-            auto mesh = resources.getMesh(entity->getMeshId());
-            if (!mesh) {
-                continue;
-            }
-
-            backend.setUniformMat4("uModel", model);
-
-            backend.drawMeshDepthOnly(*mesh, model);
+            backend.setUniformMat4("uModel", obj.transform);
+            backend.drawMeshDepthOnly(*mesh, obj.transform);
         }
 
         backend.endShadowPass();

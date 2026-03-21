@@ -1,0 +1,178 @@
+{
+  "repo": "DonaldJennings/arche",
+
+  "labels": [
+    { "name": "phase:architecture",  "color": "0075ca", "description": "Architecture foundation work" },
+    { "name": "phase:hpc-cpu",       "color": "e4e669", "description": "CPU parallelism and HPC" },
+    { "name": "phase:vulkan",        "color": "b60205", "description": "Vulkan backend" },
+    { "name": "phase:gpu-compute",   "color": "f9d0c4", "description": "GPU compute work" },
+    { "name": "phase:rt-foundation", "color": "1d76db", "description": "Ray tracing foundation" },
+    { "name": "phase:path-tracer",   "color": "0e8a16", "description": "Path tracer implementation" },
+    { "name": "type:refactor",       "color": "fef2c0", "description": "Code restructuring, no new behaviour" },
+    { "name": "type:feature",        "color": "a2eeef", "description": "New functionality" },
+    { "name": "type:performance",    "color": "ff7619", "description": "Performance improvement" },
+    { "name": "type:bugfix",         "color": "d73a4a", "description": "Bug fix" }
+  ],
+
+  "milestones": [
+    {
+      "title": "Phase 1 - Architecture Foundation",
+      "description": "Physics decoupling, SoA data layout, render data decoupling. Prerequisite for all GPU work."
+    },
+    {
+      "title": "Phase 2 - CPU Parallelism",
+      "description": "OpenMP parallel physics, fixed timestep loop."
+    },
+    {
+      "title": "Phase 3 - Vulkan Foundation",
+      "description": "Vulkan backend, geometry rendering, ImGui integration, resource management."
+    },
+    {
+      "title": "Phase 4 - GPU Compute",
+      "description": "Physics integration on GPU via Vulkan compute shaders, persistent GPU buffers."
+    },
+    {
+      "title": "Phase 5 - Ray Tracing Foundation",
+      "description": "Scene geometry buffers, BVH construction, primary rays, direct lighting."
+    },
+    {
+      "title": "Phase 6 - Path Tracer",
+      "description": "Full path tracing kernel, GGX materials, temporal accumulation, denoising."
+    }
+  ],
+
+  "issues": [
+    {
+      "title": "F-01: Physics decoupling refactor",
+      "milestone": "Phase 1 - Architecture Foundation",
+      "labels": ["phase:architecture", "type:refactor"],
+      "body": "## Summary\nRemove the raw `glm::vec3*` pointer from `PhysicsBody`. `PhysicsSystem` takes ownership of position state per body. `WorldSystem` syncs positions back to entities after each physics update via entity ID lookup.\n\n## Key changes\n- Add `entityId` to `PhysicsBody`, change `position` from `glm::vec3*` to `glm::vec3` value\n- Update `PhysicsSystem::update()` to remove pointer dereference\n- Update `WorldSystem::insertEntity` to copy position by value\n- Add position sync loop in `WorldSystem::update()` after physics step\n- Remove `getPositionPtr()` from `IEntity` and all implementations\n- Fix colliders (`SphereCollider`, `CubeCollider`) to remove stored `glm::vec3*`\n- Fix `removeEntity` bug: also remove from `PhysicsSystem` via entity ID\n\n## Files\n`engine/physics/Public/PhysicsSystem.h`, `engine/scene/Private/WorldSystem.cpp`, `engine/scene/Public/WorldSystem.h`, `engine/scene/Public/IEntity.h`, `SphereEntity.h`, `CubeEntity.h`, `PlaneEntity.h`, `SphereCollider.h`, `CubeCollider.h`\n\n## Dependencies\nNone — this is the first step.\n\n## Reference\nSee `docs/refactor-physics-decoupling.md` for the full step-by-step guide."
+    },
+    {
+      "title": "F-02: SoA physics data layout",
+      "milestone": "Phase 1 - Architecture Foundation",
+      "labels": ["phase:architecture", "type:refactor"],
+      "body": "## Summary\nReplace `std::vector<PhysicsBody>` (AoS) with parallel arrays (SoA) inside `PhysicsSystem`. This is the data format that maps directly to GPU storage buffers.\n\n## Key changes\n- Replace `m_bodies` with parallel arrays: `positions[]`, `velocities[]`, `accelerations[]`, `masses[]`, `isStatic[]`, `useGravity[]`, `entityIds[]`\n- Update `update()` to iterate the flat arrays\n- Update `addBody()` and `removeBody()` to maintain parallel arrays\n- Update `WorldSystem` position sync to read from `positions[]` by index\n\n## Files\n`engine/physics/Public/PhysicsSystem.h`\n\n## Dependencies\nF-01 must be merged first.\n\n## Why\nGPU buffers require flat contiguous arrays. SoA also improves CPU cache utilisation and is a prerequisite for OpenMP SIMD vectorisation."
+    },
+    {
+      "title": "F-03: Render data decoupling",
+      "milestone": "Phase 1 - Architecture Foundation",
+      "labels": ["phase:architecture", "type:refactor"],
+      "body": "## Summary\nIntroduce a `RenderScene` struct that `WorldSystem` populates each frame and passes to `RenderingSystem::render()`. Removes the direct `#include \"WorldSystem.h\"` dependency from `RenderingSystem`.\n\n## Key changes\n- Add `RenderScene` struct: list of `RenderObject` (mesh ID, material ID, transform matrix)\n- `WorldSystem` builds a `RenderScene` each frame from the entity map\n- `RenderingSystem::render()` accepts `const RenderScene&` instead of `const WorldSystem&`\n- Remove `#include \"WorldSystem.h\"` from `RenderingSystem.h`\n\n## Files\n`engine/renderer/Public/RenderingSystem.h`, `engine/scene/Public/WorldSystem.h`, new `engine/renderer/Public/RenderScene.h`\n\n## Dependencies\nCan be done in parallel with F-01/F-02, but must be merged before Vulkan work starts."
+    },
+    {
+      "title": "F-04: OpenMP parallel physics integration",
+      "milestone": "Phase 2 - CPU Parallelism",
+      "labels": ["phase:hpc-cpu", "type:performance"],
+      "body": "## Summary\nParallelise the physics integration loop using OpenMP. After F-02 (SoA layout) each loop iteration is fully independent with no shared mutable state.\n\n## Key changes\n- Add `find_package(OpenMP)` to `engine/physics/CMakeLists.txt`\n- Add `#pragma omp parallel for schedule(static)` to the integration loop in `PhysicsSystem::update()`\n- Verify no data races (each thread writes to a different index in the flat arrays)\n- Run existing physics tests to confirm correctness\n\n## Files\n`engine/physics/Public/PhysicsSystem.h`, `engine/physics/CMakeLists.txt`\n\n## Dependencies\nF-02 (SoA layout) must be merged first — parallel iteration over AoS with pointer members is unsafe."
+    },
+    {
+      "title": "F-05: Fixed timestep physics loop",
+      "milestone": "Phase 2 - CPU Parallelism",
+      "labels": ["phase:hpc-cpu", "type:feature"],
+      "body": "## Summary\nDecouple the physics update rate from the frame rate using an accumulator pattern. Physics steps at a fixed interval (e.g. 120 Hz); rendering interpolates between states.\n\n## Key changes\n- Add accumulator in `EngineCore::tick()`\n- Physics `update()` called N times per frame with a fixed `dt` until the accumulator is drained\n- Store previous and current position per body for render interpolation\n- Expose fixed timestep as a setting in `GlobalSettings`\n\n## Files\n`engine/core/Public/EngineCore.h`, `engine/core/Private/EngineCore.cpp`, `engine/core/Public/GlobalSettings.h`\n\n## Dependencies\nF-01. Independent of F-02 and F-04.\n\n## Why\nRequired for stable, deterministic simulation before GPU physics is introduced. Frame-rate-dependent physics produces inconsistent results at high or low framerates."
+    },
+    {
+      "title": "F-06: Vulkan device initialisation",
+      "milestone": "Phase 3 - Vulkan Foundation",
+      "labels": ["phase:vulkan", "type:feature"],
+      "body": "## Summary\nCreate a `VulkanBackend` class implementing `IRenderBackend`. Initialise a valid Vulkan context (instance, physical device, logical device, queues) without any rendering output. Add a build flag to select OpenGL or Vulkan at startup.\n\n## Key changes\n- New `engine/renderer/Public/VulkanBackend.h` implementing `IRenderBackend`\n- Instance creation with validation layers in debug builds\n- Physical device selection (prefer AMD discrete GPU, check for required extensions)\n- Logical device with graphics, compute, and transfer queues\n- CMake option `ARCHE_RENDERER_BACKEND` (opengl | vulkan)\n- Add VulkanMemoryAllocator (VMA) to `/tools` for buffer allocation\n\n## Files\n`engine/renderer/Public/VulkanBackend.h`, `engine/renderer/CMakeLists.txt`, `app/viewer/main.cpp`\n\n## Dependencies\nF-03 must be merged before this branch starts.\n\n## Notes\nUse VMA (AMD's Vulkan Memory Allocator) from the start — it eliminates most manual memory management."
+    },
+    {
+      "title": "F-07: Vulkan swapchain and frame loop",
+      "milestone": "Phase 3 - Vulkan Foundation",
+      "labels": ["phase:vulkan", "type:feature"],
+      "body": "## Summary\nSwapchain creation, image views, render pass, framebuffers, and sync primitives. Implements `beginFrame()` / `endFrame()` in `VulkanBackend`. First milestone: a Vulkan-driven cleared frame appears in the viewport.\n\n## Key changes\n- Swapchain creation and recreation on resize via `onResize()`\n- Per-frame sync primitives (image available semaphore, render finished semaphore, in-flight fence)\n- Minimal render pass (colour attachment, clear on load)\n- `beginFrame()` acquires swapchain image, `endFrame()` submits and presents\n\n## Files\n`engine/renderer/Public/VulkanBackend.h` and Private implementation\n\n## Dependencies\nF-06."
+    },
+    {
+      "title": "F-08: Vulkan geometry pass",
+      "milestone": "Phase 3 - Vulkan Foundation",
+      "labels": ["phase:vulkan", "type:feature"],
+      "body": "## Summary\nPort the existing `GeometryPass` to Vulkan. Rasterized output should match the current OpenGL renderer.\n\n## Key changes\n- Vertex/index buffer upload for all registered meshes\n- Descriptor set layout for per-frame data (view/projection) and per-object data (model matrix)\n- Push constants or UBO for transform data\n- Port existing GLSL shaders to Vulkan-compatible GLSL\n- Pipeline creation (vertex input, rasterisation state, depth test)\n- Render entities from `RenderScene` (F-03)\n\n## Files\n`engine/renderer/Public/VulkanBackend.h`, new `engine/renderer/Private/VulkanGeometryPass.cpp`\n\n## Dependencies\nF-07, F-03."
+    },
+    {
+      "title": "F-09: Vulkan ImGui integration",
+      "milestone": "Phase 3 - Vulkan Foundation",
+      "labels": ["phase:vulkan", "type:feature"],
+      "body": "## Summary\nPort the editor UI to render via Vulkan using ImGui's Vulkan backend. Editor must remain fully functional after switching to `VulkanBackend`.\n\n## Key changes\n- Initialise `imgui_impl_vulkan` alongside existing `imgui_impl_glfw`\n- Descriptor pool for ImGui textures\n- Render ImGui draw data in a separate render pass after geometry\n- Remove `imgui_impl_opengl3` when Vulkan is the active backend\n\n## Files\n`app/backends/imgui/ImGuiBackend.h`, `app/backends/imgui/GUIRunner.h`\n\n## Dependencies\nF-08."
+    },
+    {
+      "title": "F-10: Vulkan resource manager",
+      "milestone": "Phase 3 - Vulkan Foundation",
+      "labels": ["phase:vulkan", "type:feature"],
+      "body": "## Summary\nExtend `ResourceRegistry` internals for the Vulkan backend. Manages GPU-side buffer and image lifetimes using VMA. Replaces ad-hoc buffer allocation spread across passes.\n\n## Key changes\n- Buffer abstraction: staging upload, device-local buffer, mapped persistent buffer\n- Image/sampler abstraction for texture resources\n- Descriptor pool and set management\n- Safe destruction (ensure GPU is idle before freeing)\n\n## Files\n`engine/renderer/Public/ResourceRegistry.h`, new `engine/renderer/Private/VulkanResourceManager.cpp`\n\n## Dependencies\nF-06 (VMA available)."
+    },
+    {
+      "title": "F-11: Vulkan compute pipeline setup",
+      "milestone": "Phase 4 - GPU Compute",
+      "labels": ["phase:gpu-compute", "type:feature"],
+      "body": "## Summary\nEstablish the Vulkan compute pipeline. Write a trivial compute shader (scale an array of floats), dispatch it, and read back results on the CPU. Validates the full compute path before it is needed for physics or ray tracing.\n\n## Key changes\n- Compute pipeline creation (shader module, pipeline layout, descriptor set)\n- Storage buffer creation, upload, dispatch, readback\n- Synchronisation: buffer memory barriers between compute and subsequent stages\n- Smoke test: upload 1024 floats, dispatch shader that doubles each, verify readback\n\n## Files\nNew `engine/renderer/Private/VulkanComputePipeline.cpp`\n\n## Dependencies\nF-10 (resource manager for buffer allocation)."
+    },
+    {
+      "title": "F-12: GPU physics integration",
+      "milestone": "Phase 4 - GPU Compute",
+      "labels": ["phase:gpu-compute", "type:feature"],
+      "body": "## Summary\nUpload the SoA physics arrays (F-02) to GPU storage buffers. Write a compute shader that performs Euler integration, replacing `PhysicsSystem::update()` on the CPU.\n\n## Key changes\n- Upload `positions[]`, `velocities[]`, `masses[]`, `isStatic[]`, `useGravity[]` to device-local SSBOs\n- Compute shader: one thread per body, applies gravity, integrates velocity and position\n- Gravity and deltaTime passed as push constants\n- CPU readback of `positions[]` to sync `WorldSystem` entity transforms\n- `PhysicsSystem::update()` dispatches compute shader instead of iterating CPU arrays\n\n## Files\n`engine/physics/Public/PhysicsSystem.h`, new `assets/shaders/compute/physics_integrate.comp`\n\n## Dependencies\nF-11, F-02."
+    },
+    {
+      "title": "F-13: Persistent GPU buffers for scene data",
+      "milestone": "Phase 4 - GPU Compute",
+      "labels": ["phase:gpu-compute", "type:performance"],
+      "body": "## Summary\nPhysics positions stay on the GPU between frames. The geometry pass reads positions directly from the GPU buffer, eliminating the per-frame CPU readback and re-upload.\n\n## Key changes\n- Physics position SSBO shared between compute pass (write) and geometry pass (read)\n- Buffer memory barrier between compute and vertex shader stages\n- Per-frame upload only for changed data (new entities, property edits from UI)\n- CPU readback retained only for editor gizmo/inspector display\n\n## Files\n`engine/renderer/Private/VulkanGeometryPass.cpp`, `engine/physics/Public/PhysicsSystem.h`\n\n## Dependencies\nF-12, F-08."
+    },
+    {
+      "title": "F-14: Scene geometry in GPU buffers",
+      "milestone": "Phase 5 - Ray Tracing Foundation",
+      "labels": ["phase:rt-foundation", "type:feature"],
+      "body": "## Summary\nAll mesh vertex and index data available to compute shaders as device-local storage buffers. Triangle soup per mesh plus a per-instance transform buffer. This is the scene representation the ray tracer will traverse.\n\n## Key changes\n- Upload all registered mesh vertex/index data to storage buffers on `initialise()`\n- Per-instance buffer: transform matrix, mesh offset, material ID\n- Buffer updated when entities are added, removed, or transformed\n- Accessible to both the rasterisation pipeline and compute shaders\n\n## Files\n`engine/renderer/Public/ResourceRegistry.h`, `engine/renderer/Private/VulkanResourceManager.cpp`\n\n## Dependencies\nF-10, F-13."
+    },
+    {
+      "title": "F-15: BVH construction",
+      "milestone": "Phase 5 - Ray Tracing Foundation",
+      "labels": ["phase:rt-foundation", "type:feature"],
+      "body": "## Summary\nCPU-side build of an AABB bounding volume hierarchy over the scene geometry. Serialise the BVH node array to a GPU storage buffer.\n\n## Key changes\n- BVH node struct: left/right child indices, AABB min/max, leaf triangle range\n- Build algorithm: SAH split heuristic (start with midpoint split if SAH is too much upfront)\n- Flat array serialisation — no pointers, GPU traversal requires index-based tree\n- Upload BVH node buffer and triangle buffer to GPU\n- Rebuild on scene change (entity added/removed/moved)\n\n## Files\nNew `engine/renderer/Public/BVH.h`, `engine/renderer/Private/BVH.cpp`\n\n## Dependencies\nF-14.\n\n## Notes\nBVH construction math transfers directly from a CPU path tracer. The GPU traversal shader uses iterative stack-based traversal, not recursion."
+    },
+    {
+      "title": "F-16: Ray-AABB and ray-triangle intersection shaders",
+      "milestone": "Phase 5 - Ray Tracing Foundation",
+      "labels": ["phase:rt-foundation", "type:feature"],
+      "body": "## Summary\nImplement ray-AABB slab test and ray-triangle Moller-Trumbore intersection in GLSL compute shaders. Validate with a debug visualisation (colour pixels by BVH traversal depth).\n\n## Key changes\n- GLSL utility functions: `intersectAABB()`, `intersectTriangle()`, `traverseBVH()`\n- Iterative BVH traversal with an explicit stack (no recursion in GLSL)\n- Debug compute shader: outputs traversal depth as a heatmap to an output image\n- Display the debug image in the viewport3D panel\n\n## Files\nNew `assets/shaders/compute/ray_utils.glsl`, `assets/shaders/compute/bvh_debug.comp`\n\n## Dependencies\nF-15, F-11."
+    },
+    {
+      "title": "F-17: Primary ray generation",
+      "milestone": "Phase 5 - Ray Tracing Foundation",
+      "labels": ["phase:rt-foundation", "type:feature"],
+      "body": "## Summary\nCompute shader that generates one ray per pixel from the camera, traverses the BVH, and writes hit data (world position, normal, material ID) to a G-buffer. Display world-space normals as colour — first ray-traced image in the viewport.\n\n## Key changes\n- Ray generation from camera view/projection matrices (inverse projection)\n- BVH traversal per pixel, write closest hit to output image\n- G-buffer layout: position (rgba32f), normal (rgba16f), material ID (r32ui)\n- Display normal buffer as RGB in viewport3D\n\n## Files\nNew `assets/shaders/compute/primary_rays.comp`\n\n## Dependencies\nF-16."
+    },
+    {
+      "title": "F-18: Direct lighting pass",
+      "milestone": "Phase 5 - Ray Tracing Foundation",
+      "labels": ["phase:rt-foundation", "type:feature"],
+      "body": "## Summary\nShadow rays from each G-buffer hit point to the light source. Binary visibility test. Direct lighting output displayed in the viewport. Validates the full ray → intersect → shadow ray pipeline before adding bounces.\n\n## Key changes\n- Compute shader reads G-buffer (F-17), spawns a shadow ray per pixel\n- Shadow ray terminates early on any opaque hit (any-hit semantics)\n- Lambertian direct lighting: `max(dot(N, L), 0) * lightColour * visibility`\n- Light position/colour as push constants (single directional or point light)\n- Output to a floating-point HDR image, tonemapped for display\n\n## Files\nNew `assets/shaders/compute/direct_lighting.comp`\n\n## Dependencies\nF-17."
+    },
+    {
+      "title": "F-19: Path tracing kernel",
+      "milestone": "Phase 6 - Path Tracer",
+      "labels": ["phase:path-tracer", "type:feature"],
+      "body": "## Summary\nExtend the ray generation shader to full path tracing: iterative multi-bounce loop, cosine-weighted hemisphere sampling, throughput accumulation, Russian roulette termination. Start with 1 sample per pixel per frame and accumulate over time.\n\n## Key changes\n- Iterative bounce loop (no recursion): sample new direction, multiply throughput by BRDF/pdf, trace next ray\n- Cosine-weighted hemisphere sampling for diffuse surfaces\n- Russian roulette: terminate paths with probability proportional to throughput\n- Accumulation buffer (rgba32f): blend new sample with running average each frame\n- Reset accumulation when camera moves or scene changes\n- Per-pixel RNG state using PCG or xorshift stored in a persistent buffer\n\n## Files\nNew `assets/shaders/compute/path_trace.comp`\n\n## Dependencies\nF-18.\n\n## Notes\nDirect GPU port of a CPU path tracer — same mathematics, different execution model. Main GPU-specific challenge is managing per-pixel RNG state and the lack of recursion."
+    },
+    {
+      "title": "F-20: GGX material model",
+      "milestone": "Phase 6 - Path Tracer",
+      "labels": ["phase:path-tracer", "type:feature"],
+      "body": "## Summary\nImplement GGX/Smith microfacet BRDF (roughness, metallic, F0) in the path tracing kernel. Importance sample the BRDF for efficient convergence. Existing `.mat` files map their properties to PBR roughness/metallic parameters.\n\n## Key changes\n- GGX NDF, Smith geometry term, Schlick Fresnel approximation in GLSL\n- BRDF importance sampling: sample the GGX NDF to generate reflected directions\n- Material buffer on GPU: roughness, metallic, base colour, emissive per material ID\n- Update material loader to parse PBR properties from `.mat` files\n- Integrate into path tracing kernel replacing Lambertian diffuse\n\n## Files\nNew `assets/shaders/compute/brdf.glsl`, `engine/renderer/Public/MaterialLoader.h`\n\n## Dependencies\nF-19."
+    },
+    {
+      "title": "F-21: Temporal accumulation buffer",
+      "milestone": "Phase 6 - Path Tracer",
+      "labels": ["phase:path-tracer", "type:feature"],
+      "body": "## Summary\nAccumulate path tracing samples across frames into a persistent floating-point buffer. At rest, the image progressively converges to ground truth. Reset accumulation on camera movement or scene change.\n\n## Key changes\n- Persistent HDR accumulation buffer (rgba32f), same resolution as viewport\n- Blend factor: `colour = (prev * n + new) / (n + 1)` where n is the sample count\n- Detect camera movement and scene changes, reset sample counter to 0\n- Display sample count in the metrics panel\n- Expose a max sample count setting (freeze accumulation when reached)\n\n## Files\n`assets/shaders/compute/path_trace.comp`, `app/modules/metrics/`\n\n## Dependencies\nF-19."
+    },
+    {
+      "title": "F-22: Spatial denoiser",
+      "milestone": "Phase 6 - Path Tracer",
+      "labels": ["phase:path-tracer", "type:feature"],
+      "body": "## Summary\nApply a spatial denoising filter to the noisy 1 spp path traced output to produce a clean image at interactive framerates. A-trous wavelet filter is the recommended starting point (5 passes, edge-stopping on normal and depth). SVGF can follow for temporal stability.\n\n## Key changes\n- A-trous wavelet filter compute shader: 5 ping-pong passes with increasing kernel step width\n- Edge-stopping functions based on normal similarity, depth similarity, luminance similarity\n- Inputs: noisy colour buffer, G-buffer normals, G-buffer depth\n- Expose filter strength and edge-stop weights as settings in the editor\n- Toggle between raw path traced output and denoised output in the viewport\n\n## Files\nNew `assets/shaders/compute/atrous_filter.comp`\n\n## Dependencies\nF-21, F-17 (G-buffer normals and depth needed for edge-stopping).\n\n## Notes\nA-trous gives good results with low implementation cost. SVGF is the next step if temporal stability becomes a priority."
+    }
+  ]
+}
