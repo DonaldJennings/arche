@@ -19,12 +19,23 @@ set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "CMake")
 
 option(BUILD_TESTING "Build the testing tree." ON)
 
+set(ARCHE_RENDERER_BACKEND "opengl" CACHE STRING "Renderer backend to use (opengl|vulkan)")
+set_property(CACHE ARCHE_RENDERER_BACKEND PROPERTY STRINGS opengl vulkan)
+message(STATUS "Renderer backend: ${ARCHE_RENDERER_BACKEND}")
+
 add_subdirectory(tools/glad)
 add_subdirectory(tools/GLFW)
 set(GLM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/glm)
 
+# VulkanMemoryAllocator — place the VMA headers in tools/vma/include/
+set(VMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/vma)
 
 find_package(OpenGL REQUIRED)
+
+if(ARCHE_RENDERER_BACKEND STREQUAL "vulkan")
+    find_package(Vulkan REQUIRED)
+    message(STATUS "Vulkan SDK found: ${Vulkan_INCLUDE_DIRS}")
+endif()
 
 set(ENGINE_ASSET_DIR "${CMAKE_SOURCE_DIR}/engine/assets")
 add_compile_definitions(ENGINE_ASSET_DIR="${ENGINE_ASSET_DIR}")
@@ -35,19 +46,39 @@ add_subdirectory(engine)
 
 
 set(IMGUI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tools/imgui)
-file(GLOB IMGUI_SOURCES
-    ${IMGUI_DIR}/*.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
-    ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
-)
 
-add_library(arche-imgui STATIC ${IMGUI_SOURCES})
+# Core ImGui sources (always included)
+file(GLOB IMGUI_CORE_SOURCES ${IMGUI_DIR}/*.cpp)
+
+if(ARCHE_RENDERER_BACKEND STREQUAL "vulkan")
+    set(IMGUI_BACKEND_SOURCES
+        ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+        ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
+    )
+else()
+    set(IMGUI_BACKEND_SOURCES
+        ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp
+        ${IMGUI_DIR}/backends/imgui_impl_opengl3.cpp
+    )
+endif()
+
+add_library(arche-imgui STATIC ${IMGUI_CORE_SOURCES} ${IMGUI_BACKEND_SOURCES})
 target_include_directories(arche-imgui PUBLIC
     ${IMGUI_DIR}
     ${IMGUI_DIR}/backends
 )
 
-target_link_libraries(arche-imgui PUBLIC glfw OpenGL::GL)
+if(ARCHE_RENDERER_BACKEND STREQUAL "vulkan")
+    target_compile_definitions(arche-imgui PUBLIC ARCHE_BACKEND_VULKAN)
+    target_link_libraries(arche-imgui PUBLIC glfw Vulkan::Vulkan)
+    # VMA headers needed when Vulkan backend is active
+    if(EXISTS "${VMA_DIR}/include/vk_mem_alloc.h")
+        target_include_directories(arche-imgui PUBLIC ${VMA_DIR}/include)
+    endif()
+else()
+    target_link_libraries(arche-imgui PUBLIC glfw OpenGL::GL)
+endif()
+
 add_library(arche::imgui ALIAS arche-imgui)
 
 set_target_properties(arche-imgui PROPERTIES FOLDER "Tools")

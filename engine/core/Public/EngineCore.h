@@ -8,6 +8,8 @@
 #include <vector>
 #include <filesystem>
 
+struct GLFWwindow;
+
 // Forward declarations
 namespace Arche {
     namespace Scene {
@@ -74,7 +76,11 @@ namespace Arche {
              * 
              * @throws std::runtime_error if initialization of any subsystem fails
              */
-            void initialise();
+            /**
+             * @param window Native GLFW window — required for Vulkan surface creation,
+             *               ignored when using the OpenGL backend.
+             */
+            void initialise(GLFWwindow *window = nullptr);
             
             /**
              * @brief Update all engine subsystems for one frame.
@@ -192,6 +198,7 @@ namespace Arche {
             std::filesystem::path assetsPath;                               ///< Path to asset directory
             SimulationState simulationState{SimulationState::Idle};         ///< Current simulation state
             bool simulationSnapshotCaptured{false};                         ///< Whether initial state was saved
+            double m_accumulator{0.0};                                      ///< Accumulator for fixed timestep updates
         };
 
     } // namespace Core

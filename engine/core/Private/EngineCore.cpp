@@ -2,7 +2,12 @@
 #include "WorldSystem.h"
 #include "RenderingSystem.h"
 #include "PhysicsSystem.h"
-#include "OpenGLBackend.h"
+
+#ifdef ARCHE_BACKEND_VULKAN
+#   include "VulkanBackend.h"
+#else
+#   include "OpenGLBackend.h"
+#endif
 #include "ShaderLoader.h"
 #include "MaterialLoader.h"
 #include "ResourceRegistry.h"
@@ -58,7 +63,7 @@ namespace Arche {
 
         EngineCore::~EngineCore() {}
 
-        void EngineCore::initialise() {
+        void EngineCore::initialise(GLFWwindow *window) {
             ARCHE_LOG_INFO(loggingService, "Engine Core Initialising...");
 
             physicsSystem = std::make_shared<Physics::PhysicsSystem>(loggingService, globalSettings);
@@ -68,7 +73,11 @@ namespace Arche {
             worldSystem->setPhysics(physicsSystem);
             worldSystem->initialise();
 
+#ifdef ARCHE_BACKEND_VULKAN
+            auto backend = std::make_unique<Render::VulkanBackend>(window);
+#else
             auto backend = std::make_unique<Render::OpenGLBackend>();
+#endif
             renderingSystem = std::make_shared<Render::RenderingSystem>(loggingService, std::move(backend));
             
             // Initialize loaders
@@ -101,7 +110,19 @@ namespace Arche {
 
             const double simulationDt = simulationState == SimulationState::Running ? dt : 0.0;
             if (worldSystem) {
-                worldSystem->update(simulationDt);
+                if (simulationState == SimulationState::Running)
+                {
+                    m_accumulator = min(m_accumulator + dt, 0.25);
+                    const float fixedDt = globalSettings->getWorldSettings().fixedTimestep;
+                    while (m_accumulator >= fixedDt) {
+                        worldSystem->update(fixedDt);
+                        m_accumulator -= fixedDt;
+                    }
+                }
+                else
+                {
+                    worldSystem->update(0.0);
+                }
             }
 
             // Build render scene and render
@@ -152,6 +173,7 @@ namespace Arche {
         }
 
         void EngineCore::pauseSimulation() {
+            m_accumulator = 0.0; // Reset accumulator to prevent large catch-up on resume
             if (!timingService)
                 return;
 
@@ -163,6 +185,7 @@ namespace Arche {
         }
 
         void EngineCore::resetSimulation() {
+            m_accumulator = 0.0; // Reset accumulator to ensure consistent state on reset
             if (timingService) {
                 timingService->stop();
             }

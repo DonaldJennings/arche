@@ -5,6 +5,10 @@
 #include <iostream>
 #include <filesystem>
 
+#ifndef ARCHE_BACKEND_VULKAN
+#include <glad/glad.h>
+#endif
+
 namespace Arche {
 namespace GUI {
 
@@ -29,12 +33,17 @@ unsigned int LoadLogoTexture(const std::string& path, int& outWidth, int& outHei
         return 0;
     }
 
+#ifndef ARCHE_BACKEND_VULKAN
     glGenTextures(1, &s_logoTex);
     glBindTexture(GL_TEXTURE_2D, s_logoTex);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, outWidth, outHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glBindTexture(GL_TEXTURE_2D, 0);
+#else
+    (void)data; // Vulkan: logo texture upload not yet implemented
+    s_logoTex = 1; // non-zero sentinel so we don't retry
+#endif
 
     stbi_image_free(data);
     return s_logoTex;

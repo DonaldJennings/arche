@@ -64,7 +64,7 @@
       "title": "F-04: OpenMP parallel physics integration",
       "milestone": "Phase 2 - CPU Parallelism",
       "labels": ["phase:hpc-cpu", "type:performance"],
-      "body": "## Summary\nParallelise the physics integration loop using OpenMP. After F-02 (SoA layout) each loop iteration is fully independent with no shared mutable state.\n\n## Key changes\n- Add `find_package(OpenMP)` to `engine/physics/CMakeLists.txt`\n- Add `#pragma omp parallel for schedule(static)` to the integration loop in `PhysicsSystem::update()`\n- Verify no data races (each thread writes to a different index in the flat arrays)\n- Run existing physics tests to confirm correctness\n\n## Files\n`engine/physics/Public/PhysicsSystem.h`, `engine/physics/CMakeLists.txt`\n\n## Dependencies\nF-02 (SoA layout) must be merged first — parallel iteration over AoS with pointer members is unsafe."
+      "body": "2## Summary\nParallelise the physics integration loop using OpenMP. After F-02 (SoA layout) each loop iteration is fully independent with no shared mutable state.\n\n## Key changes\n- Add `find_package(OpenMP)` to `engine/physics/CMakeLists.txt`\n- Add `#pragma omp parallel for schedule(static)` to the integration loop in `PhysicsSystem::update()`\n- Verify no data races (each thread writes to a different index in the flat arrays)\n- Run existing physics tests to confirm correctness\n\n## Files\n`engine/physics/Public/PhysicsSystem.h`, `engine/physics/CMakeLists.txt`\n\n## Dependencies\nF-02 (SoA layout) must be merged first — parallel iteration over AoS with pointer members is unsafe."
     },
     {
       "title": "F-05: Fixed timestep physics loop",

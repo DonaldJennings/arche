@@ -39,7 +39,7 @@ namespace Arche {
          */
         struct WorldSettings {
             glm::vec3 gravity{0.0f, -9.81f, 0.0f};  ///< Gravity acceleration vector (m/s²)
-            float timeScale{1.0f};                   ///< Time scale multiplier for simulation speed
+            float fixedTimestep{1.0f / 120.0f};    ///< Fixed timestep for physics updates (seconds)
         };
 
         /**

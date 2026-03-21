@@ -1,0 +1,34 @@
+#version 450
+layout(local_size_x = 64) in;
+
+struct PhysicsBody {
+    vec3  position;     float _pad0;
+    vec3  velocity;     float _pad1;
+    vec3  acceleration; float _pad2;
+    float mass;
+    int   isStatic;
+    int   useGravity;
+    float _pad3;
+};
+
+layout(set = 0, binding = 0) buffer PhysicsBuffer {
+    PhysicsBody bodies[];
+};
+
+layout(push_constant) uniform PushConstants {
+    vec3  gravity;
+    float deltaTime;
+    uint  bodyCount;
+};
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= bodyCount || bodies[i].isStatic != 0) return;
+
+    if (bodies[i].useGravity != 0)
+        bodies[i].acceleration += gravity;
+
+    bodies[i].velocity    += bodies[i].acceleration * deltaTime;
+    bodies[i].position    += bodies[i].velocity    * deltaTime;
+    bodies[i].acceleration = vec3(0.0);
+}

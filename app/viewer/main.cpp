@@ -1,9 +1,11 @@
-﻿#include <exception>
+#include <exception>
 #include <iostream>
 #include <memory>
 #include <stdexcept>
 
+#ifndef ARCHE_BACKEND_VULKAN
 #include <glad/glad.h>
+#endif
 #include <GLFW/glfw3.h>
 
 #include <imgui.h>
@@ -12,8 +14,7 @@
 #include <LoggingService.h>
 #include <EditorSession.h>
 #include <WorldSystem.h>
-#include <Camera.h> // Include the Camera header
-
+#include <Camera.h>
 
 #include <DockspacePanel.h>
 #include <GUILogSink.h>
@@ -33,6 +34,11 @@
 #include <GUIRunner.h>
 #include <Viewport3D.h>
 
+#ifdef ARCHE_BACKEND_VULKAN
+#   include <VulkanBackend.h>
+#   include <RenderingSystem.h>
+#endif
+
 int main() {
     try {
         // 1. Initialize GLFW and create window
@@ -42,8 +48,8 @@ int main() {
         // 2. Create EngineCore (manages all services)
         auto engineCore = std::make_shared<Arche::Core::EngineCore>();
 
-        // 3. Initialize engine systems
-        engineCore->initialise();
+        // 3. Initialize engine systems (window passed for Vulkan surface creation)
+        engineCore->initialise(window->get());
 
         // Create and set the main camera
         auto mainCamera = std::make_shared<Arche::Render::Camera>();
@@ -69,30 +75,45 @@ int main() {
         panels.RegisterPanel(std::make_shared<Arche::GUI::ShaderBrowser>(context));
         panels.RegisterPanel(std::make_shared<Arche::GUI::EntityInspector>(context));
 
+#ifdef ARCHE_BACKEND_VULKAN
+        // Retrieve the VulkanBackend from the RenderingSystem via the new getBackend() accessor.
+        // The static_cast is safe: under ARCHE_BACKEND_VULKAN the backend is always VulkanBackend.
+        Arche::Render::VulkanBackend *vulkanBackend =
+            static_cast<Arche::Render::VulkanBackend *>(
+                engineCore->getRenderer()->getBackend());
+
+        auto guiRunner = Arche::GUI::GUIRunner(window, vulkanBackend);
+#else
         auto guiRunner = Arche::GUI::GUIRunner(window);
+#endif
         guiRunner.setDockController([&]() { panels.DrawPanels(); });
 
         engineCore->getWorld()->addEntity(
             std::make_shared<Arche::Scene::SphereEntity>(2.50f, glm::vec3(0.0f, 10.0f, -15.0f)));
 
         engineCore->resetSimulation();
-        
+
         // 6. Main loop
         while (!glfwWindowShouldClose(*window)) {
             glfwPollEvents();
 
-            // Tick the engine systems
+            // Tick the engine systems (physics + geometry pass, no present yet)
             engineCore->tick();
 
-            // Render the GUI
+            // Build and render the GUI (ImGui::Render() makes draw data available)
             guiRunner.frame();
 
+            // Present: Vulkan runs the ImGui pass then submits + presents.
+            // OpenGL: no-op here; swap buffers below.
+            engineCore->getRenderer()->present();
+
+#ifndef ARCHE_BACKEND_VULKAN
             glfwSwapBuffers(*window);
+#endif
         }
 
         engineCore->shutdown();
     } catch (const std::exception &ex) {
-
         std::cerr << "Exception: " << ex.what() << std::endl;
     } catch (...) {
         std::cerr << "Unknown exception occurred." << std::endl;

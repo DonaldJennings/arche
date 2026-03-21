@@ -10,7 +10,8 @@ add_library(${IMGUI_BACKEND_NAME} STATIC
     ${IMGUI_BACKEND_SOURCES}
 )
 
-# Expose includes from Public and also make Private and tools/imgui visible so local headers like stb_image.h can be found
+# Expose includes from Public and also make Private and tools/imgui visible
+# so local headers like stb_image.h can be found
 target_include_directories(${IMGUI_BACKEND_NAME} PUBLIC
     Public
     ${CMAKE_SOURCE_DIR}/app/imgui
@@ -19,9 +20,25 @@ target_include_directories(${IMGUI_BACKEND_NAME} PUBLIC
     ${stb_SOURCE_DIR} # provide stb headers
 )
 
+if(ARCHE_RENDERER_BACKEND STREQUAL "vulkan")
+    target_compile_definitions(${IMGUI_BACKEND_NAME} PUBLIC ARCHE_BACKEND_VULKAN)
+
+    # Need the renderer Public headers for VulkanBackend.h / VulkanContextForImGui
+    target_include_directories(${IMGUI_BACKEND_NAME} PRIVATE
+        ${CMAKE_SOURCE_DIR}/engine/renderer/Public
+    )
+    # VMA headers
+    if(EXISTS "${VMA_DIR}/include/vk_mem_alloc.h")
+        target_include_directories(${IMGUI_BACKEND_NAME} PRIVATE ${VMA_DIR}/include)
+    endif()
+endif()
 
 # Link dependencies
 target_link_libraries(${IMGUI_BACKEND_NAME} PUBLIC arche::gui-core arche::imgui)
+
+if(ARCHE_RENDERER_BACKEND STREQUAL "vulkan")
+    target_link_libraries(${IMGUI_BACKEND_NAME} PUBLIC Vulkan::Vulkan)
+endif()
 
 # Link GLEW if available (ImageManager uses <GL/glew.h>)
 find_package(GLEW)

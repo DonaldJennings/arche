@@ -52,7 +52,8 @@ namespace Arche {
                 const glm::vec3 gravity = m_settings->getWorldSettings().gravity;
                 const float dt = static_cast<float>(deltaTime);
 
-                for (std::size_t i = 0; i < m_entityIds.size(); ++i) {
+                #pragma omp parallel for schedule(static) // parallelise over bodies
+                for (int i = 0; i < m_entityIds.size(); ++i) {
                     if (m_isStatic[i])
                         continue;
 

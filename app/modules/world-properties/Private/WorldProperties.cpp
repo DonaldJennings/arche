@@ -82,7 +82,6 @@ namespace Arche {
 
             if (ImGui::CollapsingHeader("World Configuration")) {
                 ImGui::DragFloat3("Gravity", &worldSettings.gravity.x, 0.1f, -100.0f, 100.0f);
-                ImGui::SliderFloat("Time Scale", &worldSettings.timeScale, 0.0f, 5.0f);
             }
 
             if (ImGui::CollapsingHeader("Main Camera Configuration")) {

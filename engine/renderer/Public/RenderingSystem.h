@@ -102,14 +102,31 @@ namespace Arche {
 
                 for (const std::shared_ptr<IRenderPass> &pass : m_passes)
                     pass->render(viewData, *m_backend, *m_mainCamera, m_resources, renderingSettings);
+            }
 
-                m_backend->endFrame();
+            /**
+             * @brief Submit the current frame and present it.
+             *
+             * Must be called after render() and after the GUI system has called
+             * ImGui::Render() so that draw data is available for the ImGui pass.
+             * For OpenGL this is a no-op (swap buffers is handled externally).
+             */
+            void present() {
+                if (m_backend) m_backend->endFrame();
             }
 
             glm::ivec2   getBackBufferSize()   const { return m_backBufferSize; }
             unsigned int getRenderTextureID()   const {
                 return m_backend ? m_backend->getRenderTextureID() : 0u;
             }
+
+            /**
+             * @brief Return a raw (non-owning) pointer to the underlying render backend.
+             *
+             * Callers may dynamic_cast to a concrete type (e.g. VulkanBackend) when
+             * the backend is known at compile time.  Ownership stays with RenderingSystem.
+             */
+            IRenderBackend *getBackend() const { return m_backend.get(); }
 
           private:
             std::vector<std::shared_ptr<Render::IRenderPass>> m_passes;
