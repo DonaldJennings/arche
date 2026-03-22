@@ -6,13 +6,14 @@ namespace Arche::Render {
 
     void SkyPass::render(const RenderView &view, IRenderBackend &backend, const Camera &camera,
                          ResourceRegistry &resources, RenderPassSettings &settings) {
+        if (!backend.supportsProceduralSky()) return;
         // Create a cube mesh if not already present
         auto cubeMesh = resources.getMesh("skybox.cube");
         if (!cubeMesh) {
             auto mesh = std::make_shared<Mesh>("skybox.cube");
             mesh->setPrimitive(Mesh::Primitive::Triangles);
 
-            // Simple cube vertices in clip-space corners (-1…1)
+            // Simple cube vertices in clip-space corners (-1ï¿½1)
             // Only positions needed
             std::vector<Mesh::Vertex> verts = {{{-1, -1, -1}}, {{1, -1, -1}}, {{1, 1, -1}}, {{-1, 1, -1}},
                                                {{-1, -1, 1}},  {{1, -1, 1}},  {{1, 1, 1}},  {{-1, 1, 1}}};

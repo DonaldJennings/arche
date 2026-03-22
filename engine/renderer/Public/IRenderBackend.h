@@ -3,6 +3,7 @@
 #include <LoggingService.h>
 #include <TimingService.h>
 #include <array>
+#include <cstdint>
 #include <memory>
 
 #include <Camera.h>
@@ -12,6 +13,8 @@
 #include "Shader.h"
 #include "Material.h"
 #include "Mesh.h"
+#include "RenderScene.h"
+#include "ResourceRegistry.h"
 
 namespace Arche {
     namespace Render {
@@ -146,13 +149,38 @@ namespace Arche {
             virtual void setUniformVec3(const std::string &name, const glm::vec3 &value) = 0;
             
             /**
-             * @brief Get the OpenGL texture ID of the main render target.
-             * 
+             * @brief Get the texture ID of the main render target.
+             *
              * Used for displaying the rendered image in ImGui or other UI systems.
-             * 
+             * For OpenGL this is a GLuint cast to uint64_t.
+             * For Vulkan this is a VkDescriptorSet (ImTextureID) cast to uint64_t.
+             *
              * @return Texture ID (platform-specific)
              */
-            virtual unsigned int getRenderTextureID() const = 0;
+            virtual uint64_t getRenderTextureID() const = 0;
+
+            /**
+             * @brief Whether the render texture needs a Y-axis flip when displayed in ImGui.
+             *
+             * OpenGL FBOs have Y=0 at the bottom, so the image must be flipped when
+             * displayed via AddImage (UV: {0,1}→{1,0}).  Vulkan offscreen images have
+             * Y=0 at the top (standard image convention), so no flip is needed.
+             *
+             * @return true if AddImage should use flipped UV coords (OpenGL default),
+             *         false if AddImage should use normal UV coords (Vulkan).
+             */
+            virtual bool needsRenderTextureYFlip() const { return true; }
+
+            /**
+             * @brief Whether this backend supports procedural sky rendering.
+             *
+             * The sky pass uses GLSL uniforms and a sky shader that are not yet
+             * implemented for Vulkan (SPIR-V sky shader pending). Backends that
+             * return false will have the sky pass skipped entirely.
+             *
+             * @return true if the sky pass should execute (OpenGL default), false to skip.
+             */
+            virtual bool supportsProceduralSky() const { return true; }
 
             /**
              * @brief Bind a texture to a sampler slot.
@@ -187,7 +215,7 @@ namespace Arche {
              * @brief Get the shadow map texture ID.
              * @return Texture ID of the shadow depth map
              */
-            virtual unsigned int getShadowMapTextureID() const = 0;
+            virtual uint64_t getShadowMapTextureID() const = 0;
             
             /**
              * @brief Draw a mesh with depth-only rendering.
@@ -229,10 +257,31 @@ namespace Arche {
             
             /**
              * @brief Finish debug line drawing batch.
-             * 
+             *
              * Renders all accumulated debug lines.
              */
             virtual void endDebugLines() = 0;
+
+            /**
+             * @brief Upload flat scene geometry into device-local storage buffers.
+             *
+             * Packs all mesh vertex + index data from the ResourceRegistry into two
+             * flat SSBOs (one vertex buffer, one index buffer).  A mesh-name → range
+             * table is built so compute shaders can address each mesh's slice.
+             *
+             * Called once from RenderingSystem::initialise() after all meshes are
+             * registered.  No-op on backends that don't support compute.
+             */
+            virtual void uploadSceneGeometry(const ResourceRegistry &registry) {}
+
+            /**
+             * @brief Write per-instance data into the host-visible instance SSBO.
+             *
+             * Maps transform, mesh index, and material ID for every RenderObject
+             * in the scene.  Called once per frame before beginFrame().
+             * No-op on backends that don't support compute.
+             */
+            virtual void updateInstanceBuffer(const RenderScene &scene) {}
         };
 
     } // namespace Render

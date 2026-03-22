@@ -52,13 +52,13 @@ namespace Arche {
             void setMaterial(const Material &material) override;
             void setLogger(std::shared_ptr<Core::LoggingService> loggerIn) { mLogger = loggerIn; };
             void drawMesh(const Mesh &mesh, const glm::mat4 &model) override;
-            unsigned int getRenderTextureID() const override { return m_colorTexture; }
+            uint64_t getRenderTextureID() const override { return static_cast<uint64_t>(m_colorTexture); }
             void bindTexture(const std::string &name, unsigned int textureID, int slot) override;
 
             void initialiseShadowResources(int resolution) override;
             void beginShadowPass() override;
             void endShadowPass() override;
-            unsigned int getShadowMapTextureID() const override { return m_shadowMapTexture; }
+            uint64_t getShadowMapTextureID() const override { return static_cast<uint64_t>(m_shadowMapTexture); }
             void drawMeshDepthOnly(const Mesh &mesh, const glm::mat4 &model) override;
 
             void setUniformMat4(const std::string &name, const glm::mat4 &value) override;

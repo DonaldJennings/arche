@@ -73,6 +73,7 @@ namespace Arche {
           private:
             VkDevice     m_device;
             VmaAllocator m_allocator;
+            
         };
 
     } // namespace Render

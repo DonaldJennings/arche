@@ -92,9 +92,8 @@ namespace Arche {
             // which is stable across resizes) so ImGui's cached pipeline stays valid.
             createSwapchain();
             createSwapchainImageViews();
-            createGeometryRenderPass();
+            createOffscreenResources();
             createImGuiRenderPass();
-            createDepthResources();
             createFramebuffers();
             createSyncObjects();
             createCommandBuffers();
@@ -132,6 +131,13 @@ namespace Arche {
         void VulkanBackend::shutdown() noexcept {
             if (m_device == VK_NULL_HANDLE) return;
 
+            // Clear ImGui callbacks before any resource destruction.
+            // guiRunner.shutdown() has already called ImGui_ImplVulkan_Shutdown() by
+            // the time VulkanBackend::shutdown() runs, so the ImGui backend data (bd)
+            // is null.  Firing m_imguiRemoveTexture here would crash inside ImGui.
+            m_imguiAddTexture    = nullptr;
+            m_imguiRemoveTexture = nullptr;
+
             vkDeviceWaitIdle(m_device);
 
             // Physics SSBO
@@ -147,6 +153,13 @@ namespace Arche {
                 m_resourceManager->destroyBuffer(m_physicsBuffer);
                 m_resourceManager->destroyBuffer(m_physicsReadbackBuffer);
             }
+
+            // F-14: Scene geometry SSBOs
+            destroySceneGeometryBuffers();
+            m_meshRanges.clear();
+            m_meshIndexMap.clear();
+            m_materialIndexMap.clear();
+            m_sceneGeometryReady = false;
 
             // Compute pipeline
             if (m_computePipeline) m_computePipeline.reset();
@@ -196,15 +209,12 @@ namespace Arche {
             }
 
             cleanupSwapchain();
+            destroyOffscreenResources();
 
             // Render passes outlive the swapchain — destroy them explicitly here
             if (m_imguiRenderPass != VK_NULL_HANDLE) {
                 vkDestroyRenderPass(m_device, m_imguiRenderPass, nullptr);
                 m_imguiRenderPass = VK_NULL_HANDLE;
-            }
-            if (m_geometryRenderPass != VK_NULL_HANDLE) {
-                vkDestroyRenderPass(m_device, m_geometryRenderPass, nullptr);
-                m_geometryRenderPass = VK_NULL_HANDLE;
             }
 
             if (m_commandPool != VK_NULL_HANDLE) {
@@ -313,16 +323,16 @@ namespace Arche {
             if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
                 throw std::runtime_error("VulkanBackend: failed to begin command buffer");
 
-            // --- Geometry render pass ---
+            // --- Offscreen geometry render pass ---
             VkRenderPassBeginInfo rpInfo{};
             rpInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            rpInfo.renderPass  = m_geometryRenderPass;
-            rpInfo.framebuffer = m_geometryFramebuffers[m_imageIndex];
+            rpInfo.renderPass  = m_offscreenRenderPass;
+            rpInfo.framebuffer = m_offscreenFramebuffer;
             rpInfo.renderArea.offset = {0, 0};
-            rpInfo.renderArea.extent = m_swapchainExtent;
+            rpInfo.renderArea.extent = m_offscreenExtent;
 
             std::array<VkClearValue, 2> clearValues{};
-            clearValues[0].color        = {{0.10f, 0.12f, 0.15f, 1.0f}};
+            clearValues[0].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // sky blue
             clearValues[1].depthStencil = {1.0f, 0};
             rpInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
             rpInfo.pClearValues    = clearValues.data();
@@ -333,13 +343,13 @@ namespace Arche {
             VkViewport viewport{};
             viewport.x        = 0.0f;
             viewport.y        = 0.0f;
-            viewport.width    = static_cast<float>(m_swapchainExtent.width);
-            viewport.height   = static_cast<float>(m_swapchainExtent.height);
+            viewport.width    = static_cast<float>(m_offscreenExtent.width);
+            viewport.height   = static_cast<float>(m_offscreenExtent.height);
             viewport.minDepth = 0.0f;
             viewport.maxDepth = 1.0f;
             vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-            VkRect2D scissor{{0, 0}, m_swapchainExtent};
+            VkRect2D scissor{{0, 0}, m_offscreenExtent};
             vkCmdSetScissor(cmd, 0, 1, &scissor);
 
             // Bind geometry pipeline and UBO descriptor set
@@ -370,9 +380,10 @@ namespace Arche {
             imguiRpInfo.framebuffer = m_imguiFramebuffers[m_imageIndex];
             imguiRpInfo.renderArea.offset = {0, 0};
             imguiRpInfo.renderArea.extent = m_swapchainExtent;
-            // No clear — LOAD_OP_LOAD keeps geometry output
-            imguiRpInfo.clearValueCount = 0;
-            imguiRpInfo.pClearValues    = nullptr;
+            VkClearValue imguiClear{};
+            imguiClear.color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+            imguiRpInfo.clearValueCount = 1;
+            imguiRpInfo.pClearValues    = &imguiClear;
 
             vkCmdBeginRenderPass(cmd, &imguiRpInfo, VK_SUBPASS_CONTENTS_INLINE);
             if (m_imguiRenderCallback) {
@@ -669,20 +680,6 @@ namespace Arche {
                 vkDestroyFramebuffer(m_device, fb, nullptr);
             m_imguiFramebuffers.clear();
 
-            for (auto fb : m_geometryFramebuffers)
-                vkDestroyFramebuffer(m_device, fb, nullptr);
-            m_geometryFramebuffers.clear();
-
-            if (m_depthImageView != VK_NULL_HANDLE) {
-                vkDestroyImageView(m_device, m_depthImageView, nullptr);
-                m_depthImageView = VK_NULL_HANDLE;
-            }
-            if (m_depthImage != VK_NULL_HANDLE) {
-                vmaDestroyImage(m_allocator, m_depthImage, m_depthAlloc);
-                m_depthImage = VK_NULL_HANDLE;
-                m_depthAlloc = VK_NULL_HANDLE;
-            }
-
             for (auto iv : m_swapchainImageViews)
                 vkDestroyImageView(m_device, iv, nullptr);
             m_swapchainImageViews.clear();
@@ -715,10 +712,22 @@ namespace Arche {
 
             createSwapchain();
             createSwapchainImageViews();
-            createDepthResources();
             createFramebuffers();
 
             m_imguiContext.imageCount = m_swapchainImageCount;
+
+            // Resize offscreen target if the backbuffer size changed
+            {
+                uint32_t ow = static_cast<uint32_t>(std::max(1, m_backBufferSize.x));
+                uint32_t oh = static_cast<uint32_t>(std::max(1, m_backBufferSize.y));
+                if (ow != m_offscreenExtent.width || oh != m_offscreenExtent.height) {
+                    bool wasRegistered = (m_offscreenDescSet != VK_NULL_HANDLE);
+                    destroyOffscreenResources();
+                    createOffscreenResources();
+                    if (wasRegistered)
+                        registerOffscreenWithImGui();
+                }
+            }
         }
 
         void VulkanBackend::createSwapchain() {
@@ -779,7 +788,44 @@ namespace Arche {
                     m_swapchainImages[i], m_swapchainFormat, VK_IMAGE_ASPECT_COLOR_BIT);
         }
 
-        void VulkanBackend::createGeometryRenderPass() {
+        void VulkanBackend::createOffscreenResources() {
+            // Determine size (at least 1x1)
+            uint32_t w = static_cast<uint32_t>(std::max(1, m_backBufferSize.x));
+            uint32_t h = static_cast<uint32_t>(std::max(1, m_backBufferSize.y));
+            m_offscreenExtent = {w, h};
+
+            // --- Color image (sampled by ImGui) ---
+            createImage(w, h, m_swapchainFormat, VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VMA_MEMORY_USAGE_GPU_ONLY,
+                        m_offscreenColorImage, m_offscreenColorAlloc);
+            m_offscreenColorView = createImageView(m_offscreenColorImage,
+                                                    m_swapchainFormat,
+                                                    VK_IMAGE_ASPECT_COLOR_BIT);
+
+            // --- Depth image ---
+            VkFormat depthFmt = findDepthFormat();
+            createImage(w, h, depthFmt, VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                        VMA_MEMORY_USAGE_GPU_ONLY,
+                        m_offscreenDepthImage, m_offscreenDepthAlloc);
+            m_offscreenDepthView = createImageView(m_offscreenDepthImage,
+                                                    depthFmt,
+                                                    VK_IMAGE_ASPECT_DEPTH_BIT);
+
+            // --- Sampler ---
+            VkSamplerCreateInfo samplerCI{};
+            samplerCI.sType        = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+            samplerCI.magFilter    = VK_FILTER_LINEAR;
+            samplerCI.minFilter    = VK_FILTER_LINEAR;
+            samplerCI.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerCI.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerCI.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+            samplerCI.borderColor  = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+            if (vkCreateSampler(m_device, &samplerCI, nullptr, &m_offscreenSampler) != VK_SUCCESS)
+                throw std::runtime_error("Vulkan: failed to create offscreen sampler");
+
+            // --- Render pass ---
             VkAttachmentDescription colorAtt{};
             colorAtt.format         = m_swapchainFormat;
             colorAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
@@ -787,17 +833,17 @@ namespace Arche {
             colorAtt.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             colorAtt.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            colorAtt.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-            colorAtt.finalLayout    = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            colorAtt.initialLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            colorAtt.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             VkAttachmentDescription depthAtt{};
-            depthAtt.format         = findDepthFormat();
+            depthAtt.format         = depthFmt;
             depthAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
             depthAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
             depthAtt.storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             depthAtt.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             depthAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            depthAtt.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+            depthAtt.initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
             depthAtt.finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
             VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
@@ -809,42 +855,178 @@ namespace Arche {
             subpass.pColorAttachments       = &colorRef;
             subpass.pDepthStencilAttachment = &depthRef;
 
-            VkSubpassDependency dep{};
-            dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
-            dep.dstSubpass    = 0;
-            dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                              | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-            dep.srcAccessMask = 0;
-            dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT
-                              | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-            dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-                              | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            // External → subpass 0: shader read → color attachment write
+            VkSubpassDependency dep0{};
+            dep0.srcSubpass    = VK_SUBPASS_EXTERNAL;
+            dep0.dstSubpass    = 0;
+            dep0.srcStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dep0.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dep0.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dep0.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
+
+            // Subpass 0 → external: color attachment write → shader read
+            VkSubpassDependency dep1{};
+            dep1.srcSubpass    = 0;
+            dep1.dstSubpass    = VK_SUBPASS_EXTERNAL;
+            dep1.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dep1.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dep1.dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dep1.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dep1.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
             std::array<VkAttachmentDescription, 2> atts = {colorAtt, depthAtt};
+            std::array<VkSubpassDependency, 2>      deps = {dep0, dep1};
+
             VkRenderPassCreateInfo rpCI{};
             rpCI.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
             rpCI.attachmentCount = static_cast<uint32_t>(atts.size());
             rpCI.pAttachments    = atts.data();
             rpCI.subpassCount    = 1;
             rpCI.pSubpasses      = &subpass;
-            rpCI.dependencyCount = 1;
-            rpCI.pDependencies   = &dep;
+            rpCI.dependencyCount = static_cast<uint32_t>(deps.size());
+            rpCI.pDependencies   = deps.data();
 
-            if (vkCreateRenderPass(m_device, &rpCI, nullptr, &m_geometryRenderPass) != VK_SUCCESS)
-                throw std::runtime_error("Vulkan: failed to create geometry render pass");
+            if (vkCreateRenderPass(m_device, &rpCI, nullptr, &m_offscreenRenderPass) != VK_SUCCESS)
+                throw std::runtime_error("Vulkan: failed to create offscreen render pass");
+
+            // --- Framebuffer ---
+            std::array<VkImageView, 2> fbAttachments = {m_offscreenColorView, m_offscreenDepthView};
+            VkFramebufferCreateInfo fbCI{};
+            fbCI.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fbCI.renderPass      = m_offscreenRenderPass;
+            fbCI.attachmentCount = static_cast<uint32_t>(fbAttachments.size());
+            fbCI.pAttachments    = fbAttachments.data();
+            fbCI.width           = w;
+            fbCI.height          = h;
+            fbCI.layers          = 1;
+            if (vkCreateFramebuffer(m_device, &fbCI, nullptr, &m_offscreenFramebuffer) != VK_SUCCESS)
+                throw std::runtime_error("Vulkan: failed to create offscreen framebuffer");
+
+            // --- Transition images to expected initial layouts ---
+            VkCommandBufferAllocateInfo allocAI{};
+            allocAI.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            allocAI.commandPool        = m_commandPool;
+            allocAI.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            allocAI.commandBufferCount = 1;
+
+            VkCommandBuffer cmd;
+            vkAllocateCommandBuffers(m_device, &allocAI, &cmd);
+
+            VkCommandBufferBeginInfo beginInfo{};
+            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(cmd, &beginInfo);
+
+            // Color: UNDEFINED → SHADER_READ_ONLY_OPTIMAL
+            {
+                VkImageMemoryBarrier barrier{};
+                barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+                barrier.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image               = m_offscreenColorImage;
+                barrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                barrier.srcAccessMask       = 0;
+                barrier.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+                vkCmdPipelineBarrier(cmd,
+                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &barrier);
+            }
+
+            // Depth: UNDEFINED → DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+            {
+                VkImageMemoryBarrier barrier{};
+                barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+                barrier.newLayout           = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                barrier.image               = m_offscreenDepthImage;
+                barrier.subresourceRange    = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
+                barrier.srcAccessMask       = 0;
+                barrier.dstAccessMask       = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                vkCmdPipelineBarrier(cmd,
+                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &barrier);
+            }
+
+            vkEndCommandBuffer(cmd);
+
+            VkSubmitInfo submitInfo{};
+            submitInfo.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submitInfo.commandBufferCount = 1;
+            submitInfo.pCommandBuffers    = &cmd;
+            vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
+            vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
+        }
+
+        void VulkanBackend::destroyOffscreenResources() {
+            if (m_offscreenDescSet != VK_NULL_HANDLE) {
+                if (m_imguiRemoveTexture) m_imguiRemoveTexture(m_offscreenDescSet);
+                m_offscreenDescSet = VK_NULL_HANDLE;
+            }
+            if (m_offscreenFramebuffer != VK_NULL_HANDLE) {
+                vkDestroyFramebuffer(m_device, m_offscreenFramebuffer, nullptr);
+                m_offscreenFramebuffer = VK_NULL_HANDLE;
+            }
+            if (m_offscreenRenderPass != VK_NULL_HANDLE) {
+                vkDestroyRenderPass(m_device, m_offscreenRenderPass, nullptr);
+                m_offscreenRenderPass = VK_NULL_HANDLE;
+            }
+            if (m_offscreenSampler != VK_NULL_HANDLE) {
+                vkDestroySampler(m_device, m_offscreenSampler, nullptr);
+                m_offscreenSampler = VK_NULL_HANDLE;
+            }
+            if (m_offscreenDepthView != VK_NULL_HANDLE) {
+                vkDestroyImageView(m_device, m_offscreenDepthView, nullptr);
+                m_offscreenDepthView = VK_NULL_HANDLE;
+            }
+            if (m_offscreenDepthImage != VK_NULL_HANDLE) {
+                vmaDestroyImage(m_allocator, m_offscreenDepthImage, m_offscreenDepthAlloc);
+                m_offscreenDepthImage = VK_NULL_HANDLE;
+                m_offscreenDepthAlloc = VK_NULL_HANDLE;
+            }
+            if (m_offscreenColorView != VK_NULL_HANDLE) {
+                vkDestroyImageView(m_device, m_offscreenColorView, nullptr);
+                m_offscreenColorView = VK_NULL_HANDLE;
+            }
+            if (m_offscreenColorImage != VK_NULL_HANDLE) {
+                vmaDestroyImage(m_allocator, m_offscreenColorImage, m_offscreenColorAlloc);
+                m_offscreenColorImage = VK_NULL_HANDLE;
+                m_offscreenColorAlloc = VK_NULL_HANDLE;
+            }
+        }
+
+        void VulkanBackend::registerOffscreenWithImGui() {
+            if (!m_imguiAddTexture) return;
+            if (m_offscreenColorView == VK_NULL_HANDLE || m_offscreenSampler == VK_NULL_HANDLE)
+                return;
+            if (m_offscreenDescSet != VK_NULL_HANDLE) {
+                if (m_imguiRemoveTexture) m_imguiRemoveTexture(m_offscreenDescSet);
+                m_offscreenDescSet = VK_NULL_HANDLE;
+            }
+            m_offscreenDescSet = m_imguiAddTexture(
+                m_offscreenSampler, m_offscreenColorView,
+                VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
 
         void VulkanBackend::createImGuiRenderPass() {
-            // LOAD_OP_LOAD — preserve the geometry output; ImGui draws on top.
-            // Final layout is PRESENT_SRC_KHR so the image is ready for presentation.
+            // LOAD_OP_CLEAR — geometry no longer renders directly to the swapchain.
+            // ImGui draws the full UI (including the scene image via AddImage) onto a
+            // clear swapchain image. Final layout is PRESENT_SRC_KHR.
             VkAttachmentDescription colorAtt{};
             colorAtt.format         = m_swapchainFormat;
             colorAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
-            colorAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_LOAD;
+            colorAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
             colorAtt.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
             colorAtt.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            colorAtt.initialLayout  = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            colorAtt.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
             colorAtt.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
             VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
@@ -857,13 +1039,10 @@ namespace Arche {
             VkSubpassDependency dep{};
             dep.srcSubpass    = VK_SUBPASS_EXTERNAL;
             dep.dstSubpass    = 0;
-            dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            dep.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dep.srcStageMask  = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            dep.srcAccessMask = 0;
             dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            // READ_BIT is required for LOAD_OP_LOAD to see the geometry pass output;
-            // without it the load can observe undefined/stale data (visible as white overlay).
-            dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                              | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
             VkRenderPassCreateInfo rpCI{};
             rpCI.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -891,28 +1070,10 @@ namespace Arche {
 
         void VulkanBackend::createFramebuffers() {
             const size_t n = m_swapchainImageViews.size();
-            m_geometryFramebuffers.resize(n);
             m_imguiFramebuffers.resize(n);
 
             for (size_t i = 0; i < n; ++i) {
-                // Geometry framebuffer (colour + depth)
-                std::array<VkImageView, 2> geomAttachments = {
-                    m_swapchainImageViews[i], m_depthImageView
-                };
-                VkFramebufferCreateInfo fbCI{};
-                fbCI.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-                fbCI.renderPass      = m_geometryRenderPass;
-                fbCI.attachmentCount = static_cast<uint32_t>(geomAttachments.size());
-                fbCI.pAttachments    = geomAttachments.data();
-                fbCI.width           = m_swapchainExtent.width;
-                fbCI.height          = m_swapchainExtent.height;
-                fbCI.layers          = 1;
-
-                if (vkCreateFramebuffer(m_device, &fbCI, nullptr,
-                                        &m_geometryFramebuffers[i]) != VK_SUCCESS)
-                    throw std::runtime_error("Vulkan: failed to create geometry framebuffer");
-
-                // ImGui framebuffer (colour only, no depth)
+                // ImGui framebuffer (swapchain colour only — geometry goes to offscreen FB)
                 VkFramebufferCreateInfo imguiFbCI{};
                 imguiFbCI.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
                 imguiFbCI.renderPass      = m_imguiRenderPass;
@@ -1162,7 +1323,7 @@ namespace Arche {
             pipeCI.pColorBlendState    = &blend;
             pipeCI.pDynamicState       = &dynState;
             pipeCI.layout              = m_geometryPipelineLayout;
-            pipeCI.renderPass          = m_geometryRenderPass;
+            pipeCI.renderPass          = m_offscreenRenderPass;
             pipeCI.subpass             = 0;
 
             VkResult r = vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1,
@@ -1463,6 +1624,142 @@ namespace Arche {
             for (uint32_t i = 0; i < bodyCount; ++i)
                 positions[i] = gpuBodies[i].position;
             vmaUnmapMemory(m_allocator, m_physicsBuffer.allocation);
+        }
+
+        // ============================================================
+        // F-14: Scene geometry storage buffers
+        // ============================================================
+
+        namespace {
+            // GPU-side vertex stored in the flat scene geometry SSBO.
+            // std430: vec4 pos (16 B) + vec4 normal (16 B) + vec2 uv (8 B) + vec2 pad (8 B) = 48 B.
+            struct SceneVertex {
+                float px, py, pz, pw;   // position + pad  (16 B)
+                float nx, ny, nz, nw;   // normal   + pad  (16 B)
+                float u,  v;            // uv               (8 B)
+                float _p0, _p1;         // explicit pad     (8 B)
+            };
+            static_assert(sizeof(SceneVertex) == 48, "SceneVertex must be 48 bytes for std430");
+        }
+
+        void VulkanBackend::destroySceneGeometryBuffers() noexcept {
+            if (!m_resourceManager) return;
+            if (m_instanceBufferMapped && m_instanceBuffer.allocation != VK_NULL_HANDLE) {
+                vmaUnmapMemory(m_allocator, m_instanceBuffer.allocation);
+                m_instanceBufferMapped = nullptr;
+            }
+            m_resourceManager->destroyBuffer(m_instanceBuffer);
+            m_resourceManager->destroyBuffer(m_sceneVertexBuffer);
+            m_resourceManager->destroyBuffer(m_sceneIndexBuffer);
+        }
+
+        void VulkanBackend::uploadSceneGeometry(const ResourceRegistry &registry) {
+            destroySceneGeometryBuffers();
+            m_meshRanges.clear();
+            m_meshIndexMap.clear();
+            m_materialIndexMap.clear();
+            m_sceneGeometryReady = false;
+
+            // --- Pack all mesh vertices and indices into flat arrays ---
+            std::vector<SceneVertex> allVertices;
+            std::vector<uint32_t>    allIndices;
+            allVertices.reserve(8192);
+            allIndices.reserve(32768);
+
+            uint32_t meshSlot = 0;
+            for (auto &[name, mesh] : registry.getAllMeshes()) {
+                if (!mesh) continue;
+
+                MeshRange range;
+                range.vertexOffset = static_cast<uint32_t>(allVertices.size());
+                range.vertexCount  = static_cast<uint32_t>(mesh->vertexCount());
+                range.indexOffset  = static_cast<uint32_t>(allIndices.size());
+                range.indexCount   = static_cast<uint32_t>(mesh->indexCount());
+
+                for (const Mesh::Vertex &v : mesh->vertices()) {
+                    SceneVertex sv{};
+                    sv.px = v.position.x;  sv.py = v.position.y;  sv.pz = v.position.z;  sv.pw = 0.0f;
+                    sv.nx = v.normal.x;    sv.ny = v.normal.y;    sv.nz = v.normal.z;    sv.nw = 0.0f;
+                    sv.u  = v.uv.x;        sv.v  = v.uv.y;        sv._p0 = 0.0f;         sv._p1 = 0.0f;
+                    allVertices.push_back(sv);
+                }
+                for (uint32_t idx : mesh->indices())
+                    allIndices.push_back(idx);
+
+                m_meshRanges[name]   = range;
+                m_meshIndexMap[name] = meshSlot++;
+            }
+
+            // --- Build material index map ---
+            uint32_t matSlot = 0;
+            for (auto &[name, mat] : registry.getAllMaterials()) {
+                if (mat) m_materialIndexMap[name] = matSlot++;
+            }
+
+            // --- Upload device-local vertex SSBO ---
+            if (!allVertices.empty()) {
+                m_sceneVertexBuffer = m_resourceManager->createDeviceBuffer(
+                    allVertices.size() * sizeof(SceneVertex),
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    allVertices.data(),
+                    m_commandPool, m_graphicsQueue);
+            }
+
+            // --- Upload device-local index SSBO ---
+            if (!allIndices.empty()) {
+                m_sceneIndexBuffer = m_resourceManager->createDeviceBuffer(
+                    allIndices.size() * sizeof(uint32_t),
+                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                    allIndices.data(),
+                    m_commandPool, m_graphicsQueue);
+            }
+
+            // --- Allocate host-visible instance SSBO (persistent map) ---
+            m_instanceBuffer = m_resourceManager->createHostBuffer(
+                k_maxInstances * sizeof(GpuInstance),
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+            vmaMapMemory(m_allocator, m_instanceBuffer.allocation, &m_instanceBufferMapped);
+
+            m_sceneGeometryReady = true;
+            fprintf(stdout,
+                "[VulkanBackend] F-14: %zu vertices, %zu indices, %u meshes, "
+                "%u materials, instance cap %u\n",
+                allVertices.size(), allIndices.size(),
+                static_cast<uint32_t>(m_meshRanges.size()),
+                static_cast<uint32_t>(m_materialIndexMap.size()),
+                k_maxInstances);
+        }
+
+        void VulkanBackend::updateInstanceBuffer(const RenderScene &scene) {
+            if (!m_sceneGeometryReady || !m_instanceBufferMapped) return;
+
+            uint32_t count = static_cast<uint32_t>(scene.opaqueObjects.size());
+            if (count > k_maxInstances) {
+                if (m_instanceCount <= k_maxInstances) {
+                    fprintf(stderr,
+                        "[VulkanBackend] F-14 WARNING: %u instances exceeds k_maxInstances=%u; capping.\n",
+                        count, k_maxInstances);
+                }
+                count = k_maxInstances;
+            }
+
+            auto *dst = reinterpret_cast<GpuInstance *>(m_instanceBufferMapped);
+            for (uint32_t i = 0; i < count; ++i) {
+                const RenderObject &obj = scene.opaqueObjects[i];
+
+                auto meshIt = m_meshIndexMap.find(obj.meshId);
+                uint32_t meshIndex = (meshIt != m_meshIndexMap.end()) ? meshIt->second : 0u;
+
+                auto matIt = m_materialIndexMap.find(obj.materialId);
+                uint32_t materialId = (matIt != m_materialIndexMap.end()) ? matIt->second : 0u;
+
+                dst[i].transform  = obj.transform;
+                dst[i].meshIndex  = meshIndex;
+                dst[i].materialId = materialId;
+                dst[i]._pad0 = 0;
+                dst[i]._pad1 = 0;
+            }
+            m_instanceCount = count;
         }
 
         // ============================================================

@@ -70,6 +70,29 @@ namespace Arche {
         };
 
         /**
+         * @brief Per-instance data written into the host-visible instance SSBO.
+         *
+         * std430 layout: mat4 (64 B) + uint32 (4 B) + uint32 (4 B) + pad (8 B) = 80 B.
+         */
+        struct GpuInstance {
+            glm::mat4 transform{1.0f};  ///< Model-to-world matrix   (64 bytes)
+            uint32_t  meshIndex{0};     ///< Index into m_meshRanges  ( 4 bytes)
+            uint32_t  materialId{0};    ///< Index into material table ( 4 bytes)
+            uint32_t  _pad0{0};         ///< Explicit padding          ( 4 bytes)
+            uint32_t  _pad1{0};         ///< Explicit padding          ( 4 bytes)
+        };                              //                             = 80 bytes
+
+        /**
+         * @brief Byte offsets and counts for one mesh within the flat scene geometry SSBOs.
+         */
+        struct MeshRange {
+            uint32_t vertexOffset{0};  ///< First vertex index in the scene vertex SSBO
+            uint32_t vertexCount{0};
+            uint32_t indexOffset{0};   ///< First index in the scene index SSBO
+            uint32_t indexCount{0};
+        };
+
+        /**
          * @brief Vulkan context handles exposed to the ImGui integration.
          *
          * Populated by VulkanBackend::initialise() and kept valid for the engine lifetime.
@@ -137,8 +160,25 @@ namespace Arche {
             void     beginDebugLines() override {}
             void     drawDebugLine(const glm::vec3 &, const glm::vec3 &, const glm::vec3 &) override {}
             void     endDebugLines() override {}
-            unsigned int getRenderTextureID() const override { return 0; }
-            unsigned int getShadowMapTextureID() const override { return 0; }
+            uint64_t getRenderTextureID()    const override { return reinterpret_cast<uint64_t>(m_offscreenDescSet); }
+            uint64_t getShadowMapTextureID() const override { return 0; }
+            bool     needsRenderTextureYFlip() const override { return false; }
+            bool     supportsProceduralSky()   const override { return false; }
+
+            // --- F-14: Scene geometry SSBOs ---
+            void uploadSceneGeometry(const ResourceRegistry &registry) override;
+            void updateInstanceBuffer(const RenderScene &scene) override;
+
+            /** @brief Device-local flat vertex SSBO (all registered mesh vertices). */
+            VkBuffer getSceneMeshVertexBuffer() const { return m_sceneVertexBuffer.buffer; }
+            /** @brief Device-local flat index SSBO (all registered mesh indices). */
+            VkBuffer getSceneMeshIndexBuffer()  const { return m_sceneIndexBuffer.buffer; }
+            /** @brief Host-visible per-instance SSBO (updated every frame). */
+            VkBuffer getInstanceBuffer()        const { return m_instanceBuffer.buffer; }
+            /** @brief Number of instances written last frame. */
+            uint32_t getInstanceCount()         const { return m_instanceCount; }
+            /** @brief Range table: mesh name → vertex/index offsets inside the flat SSBOs. */
+            const std::unordered_map<std::string, MeshRange> &getMeshRanges() const { return m_meshRanges; }
 
             // --- F-09: ImGui integration ---
 
@@ -162,9 +202,26 @@ namespace Arche {
             }
 
             /**
-             * @brief Return the ImGui render pass (LOAD_OP_LOAD, suitable for rendering on top).
+             * @brief Return the ImGui render pass (LOAD_OP_CLEAR, owns the swapchain image).
              */
             VkRenderPass getImGuiRenderPass() const { return m_imguiRenderPass; }
+
+            /**
+             * @brief Callbacks for ImGui texture registration (app layer sets these).
+             *
+             * VulkanBackend does not link ImGui directly. GUIRunner calls
+             * setImGuiTextureCallbacks() after ImGui_ImplVulkan_Init(), then calls
+             * registerOffscreenWithImGui() to allocate the descriptor set.
+             */
+            using ImGuiAddTextureFn    = std::function<VkDescriptorSet(VkSampler, VkImageView, VkImageLayout)>;
+            using ImGuiRemoveTextureFn = std::function<void(VkDescriptorSet)>;
+            void setImGuiTextureCallbacks(ImGuiAddTextureFn add, ImGuiRemoveTextureFn remove) {
+                m_imguiAddTexture    = std::move(add);
+                m_imguiRemoveTexture = std::move(remove);
+            }
+
+            /** @brief Allocate/re-allocate the offscreen ImGui descriptor set. */
+            void registerOffscreenWithImGui();
 
             // --- F-12/F-13: GPU physics dispatch ---
 
@@ -222,12 +279,15 @@ namespace Arche {
             void cleanupSwapchain();
             void createSwapchain();
             void createSwapchainImageViews();
-            void createGeometryRenderPass();
             void createImGuiRenderPass();
             void createDepthResources();
             void createFramebuffers();
             void createSyncObjects();
             void createCommandBuffers();
+
+            // --- Offscreen render target ---
+            void createOffscreenResources();
+            void destroyOffscreenResources();
 
             // --- F-08: Geometry pipeline ---
             void createGeometryPipeline();
@@ -236,6 +296,9 @@ namespace Arche {
             void createDescriptorSets();
             void createUBOs();
             void uploadMesh(const Mesh &mesh);
+
+            // --- F-14: Scene geometry helpers ---
+            void destroySceneGeometryBuffers() noexcept;
 
             // --- F-11: Compute pipeline ---
             void createComputePipeline();
@@ -298,11 +361,9 @@ namespace Arche {
             VkFormat       m_depthFormat{VK_FORMAT_D32_SFLOAT};
 
             // Render passes
-            VkRenderPass m_geometryRenderPass{VK_NULL_HANDLE};
             VkRenderPass m_imguiRenderPass{VK_NULL_HANDLE};
 
-            // Framebuffers (one per swapchain image, two sets: geometry + imgui)
-            std::vector<VkFramebuffer> m_geometryFramebuffers;
+            // Framebuffers (one per swapchain image — ImGui pass only; geometry goes to offscreen FB)
             std::vector<VkFramebuffer> m_imguiFramebuffers;
 
             // Command pool + per-frame command buffers
@@ -341,6 +402,35 @@ namespace Arche {
             // --- F-09: ImGui ---
             VulkanContextForImGui          m_imguiContext{};
             std::function<void(VkCommandBuffer)> m_imguiRenderCallback;
+            ImGuiAddTextureFn              m_imguiAddTexture;
+            ImGuiRemoveTextureFn           m_imguiRemoveTexture;
+
+            // --- Offscreen render target (scene rendered here; displayed in ImGui viewport) ---
+            VkImage         m_offscreenColorImage{VK_NULL_HANDLE};
+            VmaAllocation   m_offscreenColorAlloc{VK_NULL_HANDLE};
+            VkImageView     m_offscreenColorView{VK_NULL_HANDLE};
+            VkImage         m_offscreenDepthImage{VK_NULL_HANDLE};
+            VmaAllocation   m_offscreenDepthAlloc{VK_NULL_HANDLE};
+            VkImageView     m_offscreenDepthView{VK_NULL_HANDLE};
+            VkSampler       m_offscreenSampler{VK_NULL_HANDLE};
+            VkRenderPass    m_offscreenRenderPass{VK_NULL_HANDLE};
+            VkFramebuffer   m_offscreenFramebuffer{VK_NULL_HANDLE};
+            VkDescriptorSet m_offscreenDescSet{VK_NULL_HANDLE};  ///< ImGui texture handle
+            VkExtent2D      m_offscreenExtent{};
+
+            // --- F-14: Flat scene geometry SSBOs ---
+            GpuBuffer m_sceneVertexBuffer;                              ///< Device-local: all SceneVertex data
+            GpuBuffer m_sceneIndexBuffer;                               ///< Device-local: all uint32 index data
+            GpuBuffer m_instanceBuffer;                                 ///< Host-visible: per-frame GpuInstance array
+            void     *m_instanceBufferMapped{nullptr};                  ///< Persistent map of m_instanceBuffer
+            bool      m_sceneGeometryReady{false};
+
+            std::unordered_map<std::string, MeshRange>  m_meshRanges;       ///< meshName → range in flat SSBOs
+            std::unordered_map<std::string, uint32_t>   m_meshIndexMap;     ///< meshName → sequential uint32 index
+            std::unordered_map<std::string, uint32_t>   m_materialIndexMap; ///< materialName → sequential uint32 ID
+
+            static constexpr uint32_t k_maxInstances{4096};
+            uint32_t m_instanceCount{0};
 
             // --- F-11: Compute pipeline ---
             std::unique_ptr<VulkanComputePipeline> m_computePipeline;

@@ -2,6 +2,7 @@
 #include "Viewport3D.h"
 #include "GizmoSystem.h"
 
+#include <cstdint>
 #include <imgui.h>
 #include <imgui_internal.h>
 
@@ -49,7 +50,7 @@ namespace Arche {
 
             // Draw renderer texture (if any) clipped to canvas
             if (context && context->renderer()) {
-                unsigned int tex = context->renderer()->getRenderTextureID();
+                uint64_t tex = context->renderer()->getRenderTextureID();
                 // resize handling (recreate FBO if canvas size changed)
                 int rw = static_cast<int>(canvasSize.x);
                 int rh = static_cast<int>(canvasSize.y);
@@ -68,7 +69,9 @@ namespace Arche {
 
                 if (tex != 0) {
                     drawList->PushClipRect(canvasP0, canvasP1, true);
-                    drawList->AddImage((void *)(intptr_t)tex, canvasP0, canvasP1, {0, 1}, {1, 0});
+                    bool flip = context->renderer()->needsRenderTextureYFlip();
+                    drawList->AddImage((ImTextureID)tex, canvasP0, canvasP1,
+                                       {0, flip ? 1.0f : 0.0f}, {1, flip ? 0.0f : 1.0f});
                     drawList->PopClipRect();
                 }
             }

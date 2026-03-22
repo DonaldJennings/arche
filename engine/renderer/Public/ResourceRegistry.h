@@ -102,8 +102,15 @@ namespace Arche {
             std::unordered_map<std::string, std::shared_ptr<Shader>> getAllShaders() const { return m_shaders; }
 
             /**
+             * @brief Get all registered meshes.
+             *
+             * @return Copy of the mesh map
+             */
+            std::unordered_map<std::string, std::shared_ptr<Mesh>> getAllMeshes() const { return m_meshes; }
+
+            /**
              * @brief Get all registered materials.
-             * 
+             *
              * @return Copy of the material map
              */
             std::unordered_map<std::string, std::shared_ptr<Material>> getAllMaterials() const { return m_materials; }

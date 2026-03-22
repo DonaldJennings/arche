@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include "Camera.h"
 #include "IRenderBackend.h"
 #include "IRenderPass.h"
@@ -40,6 +41,7 @@ namespace Arche {
                 if (m_backend) {
                     m_backend->initialise();
                     m_backend->resize(m_backBufferSize);
+                    m_backend->uploadSceneGeometry(m_resources); // F-14: flat geometry SSBOs
                 }
             }
 
@@ -98,6 +100,7 @@ namespace Arche {
                 viewData.opaqueObjects    = scene.opaqueObjects;
 
                 m_backend->setWireframe(settings.wireframe);
+                m_backend->updateInstanceBuffer(scene); // F-14: per-instance data before frame
                 m_backend->beginFrame();
 
                 for (const std::shared_ptr<IRenderPass> &pass : m_passes)
@@ -115,9 +118,12 @@ namespace Arche {
                 if (m_backend) m_backend->endFrame();
             }
 
-            glm::ivec2   getBackBufferSize()   const { return m_backBufferSize; }
-            unsigned int getRenderTextureID()   const {
+            glm::ivec2   getBackBufferSize()      const { return m_backBufferSize; }
+            uint64_t     getRenderTextureID()     const {
                 return m_backend ? m_backend->getRenderTextureID() : 0u;
+            }
+            bool         needsRenderTextureYFlip() const {
+                return m_backend ? m_backend->needsRenderTextureYFlip() : true;
             }
 
             /**

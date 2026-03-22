@@ -28,6 +28,19 @@ GUIRunner::GUIRunner(std::shared_ptr<GLFWWindowHandle> glfwWindow,
     guiSystem.reset(imguiBackend);
     guiSystem->Startup();
 
+    // Wire up ImGui texture callbacks (engine renderer doesn't link ImGui directly)
+    // and register the offscreen render target now that ImGui_ImplVulkan_Init() ran.
+    if (vulkanBackend) {
+        vulkanBackend->setImGuiTextureCallbacks(
+            [](VkSampler s, VkImageView v, VkImageLayout l) {
+                return ImGui_ImplVulkan_AddTexture(s, v, l);
+            },
+            [](VkDescriptorSet d) {
+                ImGui_ImplVulkan_RemoveTexture(d);
+            });
+        vulkanBackend->registerOffscreenWithImGui();
+    }
+
     // Register the render callback. It fires inside VulkanBackend::endFrame() which
     // is called via RenderingSystem::present() — after ImGui::Render() — so draw
     // data is guaranteed to be valid at that point.
