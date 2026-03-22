@@ -101,6 +101,7 @@ namespace Arche {
 
                 m_backend->setWireframe(settings.wireframe);
                 m_backend->updateInstanceBuffer(scene); // F-14: per-instance data before frame
+                m_backend->setPathTraceMode(settings.pathTrace.enabled); // PT mode: skip offscreen raster pass
                 m_backend->beginFrame();
 
                 for (const std::shared_ptr<IRenderPass> &pass : m_passes)

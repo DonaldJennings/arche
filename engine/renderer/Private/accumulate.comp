@@ -1,0 +1,32 @@
+#version 450
+// ─────────────────────────────────────────────────────────────────────────────
+// Arche Engine — accumulate.comp
+// Reads the RGBA32F accumulation buffer, divides by sample count, applies
+// sqrt-gamma correction, and writes the result to the 8-bit output image
+// (the offscreen colour target that ImGui samples).
+// ─────────────────────────────────────────────────────────────────────────────
+layout(local_size_x = 16, local_size_y = 16) in;
+
+layout(set = 0, binding = 0, rgba32f) uniform readonly  image2D uAccumImage;
+layout(set = 0, binding = 1, rgba8)   uniform writeonly image2D uOutputImage;
+
+layout(push_constant) uniform PC {
+    uint totalSamples;
+    uint imageW;
+    uint imageH;
+    uint _pad;
+} pc;
+
+void main() {
+    ivec2 px = ivec2(gl_GlobalInvocationID.xy);
+    if (px.x >= int(pc.imageW) || px.y >= int(pc.imageH)) return;
+
+    vec4  accum  = imageLoad(uAccumImage, px);
+    float n      = max(1.0, float(pc.totalSamples));
+    vec3  linear = accum.rgb / n;
+
+    // Gamma 2 correction (sqrt) + clamp
+    vec3 out_rgb = sqrt(clamp(linear, 0.0, 1.0));
+
+    imageStore(uOutputImage, px, vec4(out_rgb, 1.0));
+}

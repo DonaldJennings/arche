@@ -5,6 +5,8 @@
 #include "GeometryVertSPIRV.h"
 #include "GeometryFragSPIRV.h"
 #include "PhysicsShaderSPIRV.h"
+#include "PathTraceSPIRV.h"
+#include "AccumulateSPIRV.h"
 
 #include <GLFW/glfw3.h>
 #include <glm/gtc/type_ptr.hpp>
@@ -171,6 +173,10 @@ namespace Arche {
                 m_resourceManager->destroyBuffer(m_physicsBuffer);
                 m_resourceManager->destroyBuffer(m_physicsReadbackBuffer);
             }
+
+            // Path tracing pipeline
+            destroyPathTracePipeline();
+            destroyPtAccumImage();
 
             // F-14: Scene geometry SSBOs
             destroySceneGeometryBuffers();
@@ -341,46 +347,48 @@ namespace Arche {
             if (vkBeginCommandBuffer(cmd, &beginInfo) != VK_SUCCESS)
                 throw std::runtime_error("VulkanBackend: failed to begin command buffer");
 
-            // --- Offscreen geometry render pass ---
-            VkRenderPassBeginInfo rpInfo{};
-            rpInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            rpInfo.renderPass  = m_offscreenRenderPass;
-            rpInfo.framebuffer = m_offscreenFramebuffer;
-            rpInfo.renderArea.offset = {0, 0};
-            rpInfo.renderArea.extent = m_offscreenExtent;
+            if (!m_pathTraceMode) {
+                // --- Offscreen geometry render pass ---
+                VkRenderPassBeginInfo rpInfo{};
+                rpInfo.sType       = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                rpInfo.renderPass  = m_offscreenRenderPass;
+                rpInfo.framebuffer = m_offscreenFramebuffer;
+                rpInfo.renderArea.offset = {0, 0};
+                rpInfo.renderArea.extent = m_offscreenExtent;
 
-            // MSAA: 3 attachments (msaa color, depth, resolve); non-MSAA: 2.
-            // Resolve att uses DONT_CARE load but the array must cover all indices.
-            std::array<VkClearValue, 3> clearValues{};
-            clearValues[0].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // sky blue
-            clearValues[1].depthStencil = {1.0f, 0};
-            clearValues[2].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // resolve (unused)
-            const bool msaaActive = (m_msaaSamples != VK_SAMPLE_COUNT_1_BIT);
-            rpInfo.clearValueCount = msaaActive ? 3u : 2u;
-            rpInfo.pClearValues    = clearValues.data();
+                // MSAA: 3 attachments (msaa color, depth, resolve); non-MSAA: 2.
+                // Resolve att uses DONT_CARE load but the array must cover all indices.
+                std::array<VkClearValue, 3> clearValues{};
+                clearValues[0].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // sky blue
+                clearValues[1].depthStencil = {1.0f, 0};
+                clearValues[2].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // resolve (unused)
+                const bool msaaActive = (m_msaaSamples != VK_SAMPLE_COUNT_1_BIT);
+                rpInfo.clearValueCount = msaaActive ? 3u : 2u;
+                rpInfo.pClearValues    = clearValues.data();
 
-            vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
+                vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-            // Set dynamic viewport + scissor
-            VkViewport viewport{};
-            viewport.x        = 0.0f;
-            viewport.y        = 0.0f;
-            viewport.width    = static_cast<float>(m_offscreenExtent.width);
-            viewport.height   = static_cast<float>(m_offscreenExtent.height);
-            viewport.minDepth = 0.0f;
-            viewport.maxDepth = 1.0f;
-            vkCmdSetViewport(cmd, 0, 1, &viewport);
+                // Set dynamic viewport + scissor
+                VkViewport viewport{};
+                viewport.x        = 0.0f;
+                viewport.y        = 0.0f;
+                viewport.width    = static_cast<float>(m_offscreenExtent.width);
+                viewport.height   = static_cast<float>(m_offscreenExtent.height);
+                viewport.minDepth = 0.0f;
+                viewport.maxDepth = 1.0f;
+                vkCmdSetViewport(cmd, 0, 1, &viewport);
 
-            VkRect2D scissor{{0, 0}, m_offscreenExtent};
-            vkCmdSetScissor(cmd, 0, 1, &scissor);
+                VkRect2D scissor{{0, 0}, m_offscreenExtent};
+                vkCmdSetScissor(cmd, 0, 1, &scissor);
 
-            // Bind geometry pipeline and UBO descriptor set
-            if (m_geometryPipelineReady) {
-                vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_geometryPipeline);
-                vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                        m_geometryPipelineLayout, 0, 1,
-                                        &m_descriptorSets[m_currentFrame],
-                                        0, nullptr);
+                // Bind geometry pipeline and UBO descriptor set
+                if (m_geometryPipelineReady) {
+                    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, m_geometryPipeline);
+                    vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                            m_geometryPipelineLayout, 0, 1,
+                                            &m_descriptorSets[m_currentFrame],
+                                            0, nullptr);
+                }
             }
 
             m_frameStarted = true;
@@ -392,8 +400,10 @@ namespace Arche {
 
             VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
-            // End geometry render pass
-            vkCmdEndRenderPass(cmd);
+            // End geometry render pass (skip when path trace mode owns the offscreen image)
+            if (!m_pathTraceMode) {
+                vkCmdEndRenderPass(cmd);
+            }
 
             // --- ImGui render pass (LOAD_OP_LOAD renders on top) ---
             VkRenderPassBeginInfo imguiRpInfo{};
@@ -818,13 +828,15 @@ namespace Arche {
 
             const bool msaa = (m_msaaSamples != VK_SAMPLE_COUNT_1_BIT);
 
-            // --- Resolve/single-sample color image (sampled by ImGui) ---
-            createImage(w, h, m_swapchainFormat, VK_IMAGE_TILING_OPTIMAL,
-                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            // --- Resolve/single-sample color image (sampled by ImGui, writable by PT accumulate) ---
+            // Use a fixed R8G8B8A8_UNORM format: guaranteed to support VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+            createImage(w, h, k_offscreenColorFormat, VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+                        VK_IMAGE_USAGE_STORAGE_BIT,
                         VMA_MEMORY_USAGE_GPU_ONLY,
                         m_offscreenColorImage, m_offscreenColorAlloc);
             m_offscreenColorView = createImageView(m_offscreenColorImage,
-                                                    m_swapchainFormat,
+                                                    k_offscreenColorFormat,
                                                     VK_IMAGE_ASPECT_COLOR_BIT);
 
             // --- Depth image (multisampled when MSAA is active) ---
@@ -840,13 +852,13 @@ namespace Arche {
 
             // --- MSAA color image (transient, only when MSAA > 1x) ---
             if (msaa) {
-                createImage(w, h, m_swapchainFormat, VK_IMAGE_TILING_OPTIMAL,
+                createImage(w, h, k_offscreenColorFormat, VK_IMAGE_TILING_OPTIMAL,
                             VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                             VMA_MEMORY_USAGE_GPU_ONLY,
                             m_msaaColorImage, m_msaaColorAlloc,
                             m_msaaSamples);
                 m_msaaColorView = createImageView(m_msaaColorImage,
-                                                   m_swapchainFormat,
+                                                   k_offscreenColorFormat,
                                                    VK_IMAGE_ASPECT_COLOR_BIT);
             }
 
@@ -865,7 +877,7 @@ namespace Arche {
             // --- Render pass ---
             // Att 0: color (MSAA transient when msaa=true, else single-sample)
             VkAttachmentDescription colorAtt{};
-            colorAtt.format         = m_swapchainFormat;
+            colorAtt.format         = k_offscreenColorFormat;
             colorAtt.samples        = msaa ? m_msaaSamples : VK_SAMPLE_COUNT_1_BIT;
             colorAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
             colorAtt.storeOp        = msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
@@ -893,7 +905,7 @@ namespace Arche {
             VkAttachmentDescription resolveAtt{};
             VkAttachmentReference   resolveRef{};
             if (msaa) {
-                resolveAtt.format         = m_swapchainFormat;
+                resolveAtt.format         = k_offscreenColorFormat;
                 resolveAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
                 resolveAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
                 resolveAtt.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
@@ -2037,6 +2049,506 @@ namespace Arche {
             if (vkCreateShaderModule(m_device, &ci, nullptr, &mod) != VK_SUCCESS)
                 throw std::runtime_error("Vulkan: failed to create shader module");
             return mod;
+        }
+
+        // ============================================================
+        // Path-tracing pipeline
+        // ============================================================
+
+        void VulkanBackend::createPtAccumImage(uint32_t w, uint32_t h) {
+            destroyPtAccumImage();
+            createImage(w, h, VK_FORMAT_R32G32B32A32_SFLOAT,
+                        VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                        VMA_MEMORY_USAGE_GPU_ONLY,
+                        m_ptAccumImage, m_ptAccumAlloc);
+            m_ptAccumView = createImageView(m_ptAccumImage,
+                                            VK_FORMAT_R32G32B32A32_SFLOAT,
+                                            VK_IMAGE_ASPECT_COLOR_BIT);
+
+            // Transition to GENERAL (required for storage image)
+            VkCommandBufferAllocateInfo ai{};
+            ai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            ai.commandPool = m_commandPool;
+            ai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            ai.commandBufferCount = 1;
+            VkCommandBuffer cmd;
+            vkAllocateCommandBuffers(m_device, &ai, &cmd);
+            VkCommandBufferBeginInfo bi{};
+            bi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(cmd, &bi);
+
+            VkImageMemoryBarrier bar{};
+            bar.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            bar.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+            bar.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+            bar.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            bar.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            bar.image               = m_ptAccumImage;
+            bar.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            bar.srcAccessMask       = 0;
+            bar.dstAccessMask       = VK_ACCESS_SHADER_WRITE_BIT;
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &bar);
+
+            vkEndCommandBuffer(cmd);
+            VkSubmitInfo si{};
+            si.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            si.commandBufferCount = 1;
+            si.pCommandBuffers = &cmd;
+            vkQueueSubmit(m_graphicsQueue, 1, &si, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
+            vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
+        }
+
+        void VulkanBackend::destroyPtAccumImage() noexcept {
+            if (m_ptAccumView != VK_NULL_HANDLE) {
+                vkDestroyImageView(m_device, m_ptAccumView, nullptr);
+                m_ptAccumView = VK_NULL_HANDLE;
+            }
+            if (m_ptAccumImage != VK_NULL_HANDLE) {
+                vmaDestroyImage(m_allocator, m_ptAccumImage, m_ptAccumAlloc);
+                m_ptAccumImage = VK_NULL_HANDLE;
+                m_ptAccumAlloc = VK_NULL_HANDLE;
+            }
+        }
+
+        void VulkanBackend::createPathTracePipeline() {
+            // ── Path-trace compute pipeline ──────────────────────────────────
+            // Descriptor set layout
+            // binding 0: storage image (accumulation buffer)
+            // binding 1: sphere SSBO
+            // binding 2: material SSBO
+            // binding 3: BVH SSBO
+            {
+                std::array<VkDescriptorSetLayoutBinding, 4> bindings{};
+                bindings[0].binding         = 0;
+                bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                bindings[0].descriptorCount = 1;
+                bindings[0].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+                bindings[1].binding         = 1;
+                bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                bindings[1].descriptorCount = 1;
+                bindings[1].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+                bindings[2].binding         = 2;
+                bindings[2].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                bindings[2].descriptorCount = 1;
+                bindings[2].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+                bindings[3].binding         = 3;
+                bindings[3].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                bindings[3].descriptorCount = 1;
+                bindings[3].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+                VkDescriptorSetLayoutCreateInfo ci{};
+                ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+                ci.bindingCount = static_cast<uint32_t>(bindings.size());
+                ci.pBindings    = bindings.data();
+                if (vkCreateDescriptorSetLayout(m_device, &ci, nullptr, &m_ptDescSetLayout) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to create desc set layout");
+            }
+
+            // Descriptor pool
+            {
+                std::array<VkDescriptorPoolSize, 2> sizes{};
+                sizes[0] = {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,  1};
+                sizes[1] = {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3};
+                VkDescriptorPoolCreateInfo pi{};
+                pi.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+                pi.maxSets       = 1;
+                pi.poolSizeCount = static_cast<uint32_t>(sizes.size());
+                pi.pPoolSizes    = sizes.data();
+                if (vkCreateDescriptorPool(m_device, &pi, nullptr, &m_ptDescPool) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to create descriptor pool");
+                VkDescriptorSetAllocateInfo ai{};
+                ai.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                ai.descriptorPool     = m_ptDescPool;
+                ai.descriptorSetCount = 1;
+                ai.pSetLayouts        = &m_ptDescSetLayout;
+                if (vkAllocateDescriptorSets(m_device, &ai, &m_ptDescSet) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to allocate descriptor set");
+            }
+
+            // Pipeline layout (push constants = 128 bytes)
+            {
+                VkPushConstantRange pcr{};
+                pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+                pcr.offset     = 0;
+                pcr.size       = 128;
+                VkPipelineLayoutCreateInfo pli{};
+                pli.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+                pli.setLayoutCount         = 1;
+                pli.pSetLayouts            = &m_ptDescSetLayout;
+                pli.pushConstantRangeCount = 1;
+                pli.pPushConstantRanges    = &pcr;
+                if (vkCreatePipelineLayout(m_device, &pli, nullptr, &m_ptPipelineLayout) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to create pipeline layout");
+            }
+
+            // Compute pipeline
+            {
+                VkShaderModule mod = createShaderModule(
+                    k_pathTraceSPIRV, sizeof(k_pathTraceSPIRV) / sizeof(uint32_t));
+                VkPipelineShaderStageCreateInfo stage{};
+                stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+                stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+                stage.module = mod;
+                stage.pName  = "main";
+                VkComputePipelineCreateInfo ci{};
+                ci.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+                ci.stage  = stage;
+                ci.layout = m_ptPipelineLayout;
+                if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &ci, nullptr, &m_ptPipeline) != VK_SUCCESS) {
+                    vkDestroyShaderModule(m_device, mod, nullptr);
+                    throw std::runtime_error("Vulkan PT: failed to create compute pipeline");
+                }
+                vkDestroyShaderModule(m_device, mod, nullptr);
+            }
+
+            // ── Accumulate / tone-map pipeline ───────────────────────────────
+            // binding 0: accumulation image (rgba32f, read)
+            // binding 1: output image (rgba8, write)
+            {
+                std::array<VkDescriptorSetLayoutBinding, 2> bindings{};
+                bindings[0].binding         = 0;
+                bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                bindings[0].descriptorCount = 1;
+                bindings[0].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+                bindings[1].binding         = 1;
+                bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                bindings[1].descriptorCount = 1;
+                bindings[1].stageFlags      = VK_SHADER_STAGE_COMPUTE_BIT;
+
+                VkDescriptorSetLayoutCreateInfo ci{};
+                ci.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+                ci.bindingCount = static_cast<uint32_t>(bindings.size());
+                ci.pBindings    = bindings.data();
+                if (vkCreateDescriptorSetLayout(m_device, &ci, nullptr, &m_accumDescSetLayout) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to create accum desc set layout");
+            }
+            {
+                VkDescriptorPoolSize ps{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2};
+                VkDescriptorPoolCreateInfo pi{};
+                pi.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+                pi.maxSets       = 1;
+                pi.poolSizeCount = 1;
+                pi.pPoolSizes    = &ps;
+                if (vkCreateDescriptorPool(m_device, &pi, nullptr, &m_accumDescPool) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to create accum pool");
+                VkDescriptorSetAllocateInfo ai{};
+                ai.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                ai.descriptorPool     = m_accumDescPool;
+                ai.descriptorSetCount = 1;
+                ai.pSetLayouts        = &m_accumDescSetLayout;
+                if (vkAllocateDescriptorSets(m_device, &ai, &m_accumDescSet) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to alloc accum desc set");
+            }
+            {
+                VkPushConstantRange pcr{};
+                pcr.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+                pcr.offset     = 0;
+                pcr.size       = sizeof(AccumulatePushConstants);
+                VkPipelineLayoutCreateInfo pli{};
+                pli.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+                pli.setLayoutCount         = 1;
+                pli.pSetLayouts            = &m_accumDescSetLayout;
+                pli.pushConstantRangeCount = 1;
+                pli.pPushConstantRanges    = &pcr;
+                if (vkCreatePipelineLayout(m_device, &pli, nullptr, &m_accumPipelineLayout) != VK_SUCCESS)
+                    throw std::runtime_error("Vulkan PT: failed to create accum pipeline layout");
+            }
+            {
+                VkShaderModule mod = createShaderModule(
+                    k_accumulateSPIRV, sizeof(k_accumulateSPIRV) / sizeof(uint32_t));
+                VkPipelineShaderStageCreateInfo stage{};
+                stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+                stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+                stage.module = mod;
+                stage.pName  = "main";
+                VkComputePipelineCreateInfo ci{};
+                ci.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+                ci.stage  = stage;
+                ci.layout = m_accumPipelineLayout;
+                if (vkCreateComputePipelines(m_device, VK_NULL_HANDLE, 1, &ci, nullptr, &m_accumPipeline) != VK_SUCCESS) {
+                    vkDestroyShaderModule(m_device, mod, nullptr);
+                    throw std::runtime_error("Vulkan PT: failed to create accum pipeline");
+                }
+                vkDestroyShaderModule(m_device, mod, nullptr);
+            }
+
+            m_ptPipelineReady = true;
+        }
+
+        void VulkanBackend::destroyPathTracePipeline() noexcept {
+            if (!m_device) return;
+            vkDeviceWaitIdle(m_device);
+
+            if (m_ptSphereBuffer.buffer   != VK_NULL_HANDLE && m_resourceManager) m_resourceManager->destroyBuffer(m_ptSphereBuffer);
+            if (m_ptMaterialBuffer.buffer != VK_NULL_HANDLE && m_resourceManager) m_resourceManager->destroyBuffer(m_ptMaterialBuffer);
+            if (m_ptBvhBuffer.buffer      != VK_NULL_HANDLE && m_resourceManager) m_resourceManager->destroyBuffer(m_ptBvhBuffer);
+
+            if (m_accumPipeline       != VK_NULL_HANDLE) { vkDestroyPipeline(m_device, m_accumPipeline, nullptr);             m_accumPipeline       = VK_NULL_HANDLE; }
+            if (m_accumPipelineLayout != VK_NULL_HANDLE) { vkDestroyPipelineLayout(m_device, m_accumPipelineLayout, nullptr);  m_accumPipelineLayout = VK_NULL_HANDLE; }
+            if (m_accumDescPool       != VK_NULL_HANDLE) { vkDestroyDescriptorPool(m_device, m_accumDescPool, nullptr);        m_accumDescPool       = VK_NULL_HANDLE; }
+            if (m_accumDescSetLayout  != VK_NULL_HANDLE) { vkDestroyDescriptorSetLayout(m_device, m_accumDescSetLayout, nullptr); m_accumDescSetLayout = VK_NULL_HANDLE; }
+            m_accumDescSet = VK_NULL_HANDLE;
+
+            if (m_ptPipeline       != VK_NULL_HANDLE) { vkDestroyPipeline(m_device, m_ptPipeline, nullptr);             m_ptPipeline       = VK_NULL_HANDLE; }
+            if (m_ptPipelineLayout != VK_NULL_HANDLE) { vkDestroyPipelineLayout(m_device, m_ptPipelineLayout, nullptr);  m_ptPipelineLayout = VK_NULL_HANDLE; }
+            if (m_ptDescPool       != VK_NULL_HANDLE) { vkDestroyDescriptorPool(m_device, m_ptDescPool, nullptr);        m_ptDescPool       = VK_NULL_HANDLE; }
+            if (m_ptDescSetLayout  != VK_NULL_HANDLE) { vkDestroyDescriptorSetLayout(m_device, m_ptDescSetLayout, nullptr); m_ptDescSetLayout = VK_NULL_HANDLE; }
+            m_ptDescSet = VK_NULL_HANDLE;
+
+            m_ptPipelineReady = false;
+        }
+
+        void VulkanBackend::updatePtDescriptorSets() {
+            // PT set: binding 0 = accum image
+            VkDescriptorImageInfo accumInfo{};
+            accumInfo.imageView   = m_ptAccumView;
+            accumInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            VkDescriptorBufferInfo sphereInfo{};
+            sphereInfo.buffer = m_ptSphereBuffer.buffer;
+            sphereInfo.offset = 0;
+            sphereInfo.range  = m_ptSphereBuffer.size;
+
+            VkDescriptorBufferInfo matInfo{};
+            matInfo.buffer = m_ptMaterialBuffer.buffer;
+            matInfo.offset = 0;
+            matInfo.range  = m_ptMaterialBuffer.size;
+
+            VkDescriptorBufferInfo bvhInfo{};
+            bvhInfo.buffer = m_ptBvhBuffer.buffer;
+            bvhInfo.offset = 0;
+            bvhInfo.range  = m_ptBvhBuffer.size;
+
+            std::array<VkWriteDescriptorSet, 4> writes{};
+            writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstSet          = m_ptDescSet;
+            writes[0].dstBinding      = 0;
+            writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            writes[0].descriptorCount = 1;
+            writes[0].pImageInfo      = &accumInfo;
+
+            writes[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1].dstSet          = m_ptDescSet;
+            writes[1].dstBinding      = 1;
+            writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[1].descriptorCount = 1;
+            writes[1].pBufferInfo     = &sphereInfo;
+
+            writes[2].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[2].dstSet          = m_ptDescSet;
+            writes[2].dstBinding      = 2;
+            writes[2].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[2].descriptorCount = 1;
+            writes[2].pBufferInfo     = &matInfo;
+
+            writes[3].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[3].dstSet          = m_ptDescSet;
+            writes[3].dstBinding      = 3;
+            writes[3].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[3].descriptorCount = 1;
+            writes[3].pBufferInfo     = &bvhInfo;
+
+            vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+
+            // Accum set: binding 0 = accum image (read), binding 1 = offscreen (write)
+            VkDescriptorImageInfo outInfo{};
+            outInfo.imageView   = m_offscreenColorView;
+            outInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+            std::array<VkWriteDescriptorSet, 2> accumWrites{};
+            accumWrites[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            accumWrites[0].dstSet          = m_accumDescSet;
+            accumWrites[0].dstBinding      = 0;
+            accumWrites[0].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            accumWrites[0].descriptorCount = 1;
+            accumWrites[0].pImageInfo      = &accumInfo;
+
+            accumWrites[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            accumWrites[1].dstSet          = m_accumDescSet;
+            accumWrites[1].dstBinding      = 1;
+            accumWrites[1].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            accumWrites[1].descriptorCount = 1;
+            accumWrites[1].pImageInfo      = &outInfo;
+
+            vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(accumWrites.size()), accumWrites.data(), 0, nullptr);
+        }
+
+        void VulkanBackend::dispatchPathTrace(
+            const std::vector<GpuSphere>   &spheres,
+            const std::vector<GpuMaterial> &materials,
+            const std::vector<GpuBvhNode>  &bvhNodes,
+            const PathTracePushConstants   &pcData,
+            uint32_t                        totalSamples,
+            bool                            resetAccum)
+        {
+            if (!m_ptPipelineReady) {
+                // Lazy init: create pipeline + accum image on first call
+                createPathTracePipeline();
+                createPtAccumImage(m_offscreenExtent.width, m_offscreenExtent.height);
+            }
+
+            // Recreate accum image if offscreen size changed
+            if (m_ptAccumImage == VK_NULL_HANDLE ||
+                m_offscreenExtent.width  != static_cast<uint32_t>(m_backBufferSize.x) ||
+                m_offscreenExtent.height != static_cast<uint32_t>(m_backBufferSize.y))
+            {
+                createPtAccumImage(m_offscreenExtent.width, m_offscreenExtent.height);
+                resetAccum = true;
+            }
+
+            // Upload scene buffers (always rebuild when called)
+            vkDeviceWaitIdle(m_device); // simple sync for scene upload
+            if (m_ptSphereBuffer.buffer   != VK_NULL_HANDLE) m_resourceManager->destroyBuffer(m_ptSphereBuffer);
+            if (m_ptMaterialBuffer.buffer != VK_NULL_HANDLE) m_resourceManager->destroyBuffer(m_ptMaterialBuffer);
+            if (m_ptBvhBuffer.buffer      != VK_NULL_HANDLE) m_resourceManager->destroyBuffer(m_ptBvhBuffer);
+
+            VkDeviceSize sphereBytes = spheres.empty()   ? sizeof(GpuSphere)   : spheres.size()   * sizeof(GpuSphere);
+            VkDeviceSize matBytes    = materials.empty() ? sizeof(GpuMaterial) : materials.size() * sizeof(GpuMaterial);
+            VkDeviceSize bvhBytes    = bvhNodes.empty()  ? sizeof(GpuBvhNode)  : bvhNodes.size()  * sizeof(GpuBvhNode);
+
+            m_ptSphereBuffer   = m_resourceManager->createDeviceBuffer(sphereBytes,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                spheres.empty() ? nullptr : spheres.data(), m_commandPool, m_computeQueue);
+            m_ptMaterialBuffer = m_resourceManager->createDeviceBuffer(matBytes,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                materials.empty() ? nullptr : materials.data(), m_commandPool, m_computeQueue);
+            m_ptBvhBuffer      = m_resourceManager->createDeviceBuffer(bvhBytes,
+                VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                bvhNodes.empty() ? nullptr : bvhNodes.data(), m_commandPool, m_computeQueue);
+
+            m_ptSphereCount  = static_cast<uint32_t>(spheres.size());
+            m_ptBvhNodeCount = static_cast<uint32_t>(bvhNodes.size());
+
+            updatePtDescriptorSets();
+
+            // ── Record a one-shot compute command buffer ──────────────────────
+            VkCommandBufferAllocateInfo cai{};
+            cai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+            cai.commandPool        = m_commandPool;
+            cai.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            cai.commandBufferCount = 1;
+            VkCommandBuffer cmd;
+            vkAllocateCommandBuffers(m_device, &cai, &cmd);
+            VkCommandBufferBeginInfo beginI{};
+            beginI.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            beginI.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(cmd, &beginI);
+
+            // Optional: clear accumulation buffer
+            if (resetAccum) {
+                VkClearColorValue clearColor{};
+                VkImageSubresourceRange range{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                vkCmdClearColorImage(cmd, m_ptAccumImage, VK_IMAGE_LAYOUT_GENERAL,
+                                     &clearColor, 1, &range);
+                // Barrier after clear
+                VkImageMemoryBarrier clearBarrier{};
+                clearBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                clearBarrier.oldLayout           = VK_IMAGE_LAYOUT_GENERAL;
+                clearBarrier.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+                clearBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                clearBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+                clearBarrier.image               = m_ptAccumImage;
+                clearBarrier.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+                clearBarrier.srcAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
+                clearBarrier.dstAccessMask       = VK_ACCESS_SHADER_WRITE_BIT;
+                vkCmdPipelineBarrier(cmd,
+                    VK_PIPELINE_STAGE_TRANSFER_BIT,
+                    VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    0, 0, nullptr, 0, nullptr, 1, &clearBarrier);
+            }
+
+            // ── Path trace dispatch ───────────────────────────────────────────
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ptPipeline);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    m_ptPipelineLayout, 0, 1, &m_ptDescSet, 0, nullptr);
+            vkCmdPushConstants(cmd, m_ptPipelineLayout,
+                               VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                               sizeof(PathTracePushConstants), &pcData);
+
+            uint32_t gx = (m_offscreenExtent.width  + 15) / 16;
+            uint32_t gy = (m_offscreenExtent.height + 15) / 16;
+            vkCmdDispatch(cmd, gx, gy, 1);
+
+            // Barrier: compute write → compute read (for accumulate pass)
+            VkImageMemoryBarrier ptToAccum{};
+            ptToAccum.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            ptToAccum.oldLayout           = VK_IMAGE_LAYOUT_GENERAL;
+            ptToAccum.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+            ptToAccum.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            ptToAccum.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            ptToAccum.image               = m_ptAccumImage;
+            ptToAccum.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            ptToAccum.srcAccessMask       = VK_ACCESS_SHADER_WRITE_BIT;
+            ptToAccum.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &ptToAccum);
+
+            // Transition offscreen image: SHADER_READ_ONLY → GENERAL (for storage write)
+            VkImageMemoryBarrier offToGeneral{};
+            offToGeneral.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            offToGeneral.oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            offToGeneral.newLayout           = VK_IMAGE_LAYOUT_GENERAL;
+            offToGeneral.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            offToGeneral.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            offToGeneral.image               = m_offscreenColorImage;
+            offToGeneral.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            offToGeneral.srcAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+            offToGeneral.dstAccessMask       = VK_ACCESS_SHADER_WRITE_BIT;
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &offToGeneral);
+
+            // ── Accumulate / tone-map dispatch ────────────────────────────────
+            vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_accumPipeline);
+            vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    m_accumPipelineLayout, 0, 1, &m_accumDescSet, 0, nullptr);
+            AccumulatePushConstants apc{};
+            apc.totalSamples = totalSamples;
+            apc.imageW       = m_offscreenExtent.width;
+            apc.imageH       = m_offscreenExtent.height;
+            vkCmdPushConstants(cmd, m_accumPipelineLayout,
+                               VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                               sizeof(AccumulatePushConstants), &apc);
+            vkCmdDispatch(cmd, gx, gy, 1);
+
+            // Transition offscreen image: GENERAL → SHADER_READ_ONLY (for ImGui)
+            VkImageMemoryBarrier offToShader{};
+            offToShader.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+            offToShader.oldLayout           = VK_IMAGE_LAYOUT_GENERAL;
+            offToShader.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            offToShader.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            offToShader.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+            offToShader.image               = m_offscreenColorImage;
+            offToShader.subresourceRange    = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+            offToShader.srcAccessMask       = VK_ACCESS_SHADER_WRITE_BIT;
+            offToShader.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+            vkCmdPipelineBarrier(cmd,
+                VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                0, 0, nullptr, 0, nullptr, 1, &offToShader);
+
+            vkEndCommandBuffer(cmd);
+
+            VkSubmitInfo si{};
+            si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            si.commandBufferCount = 1;
+            si.pCommandBuffers    = &cmd;
+            vkQueueSubmit(m_computeQueue, 1, &si, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_computeQueue);
+            vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
         }
 
     } // namespace Render

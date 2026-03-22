@@ -1,0 +1,7 @@
+shader = PBR
+uAlbedo        = 1.0, 1.0, 1.0
+uMetallic      = 0.0
+uRoughness     = 0.0
+uMaterialType  = 2.0
+uFuzz          = 0.0
+uIOR           = 1.5

@@ -4,6 +4,7 @@
 #include "IRenderBackend.h"
 #include "VulkanResourceManager.h"
 #include "VulkanComputePipeline.h"
+#include "BvhBuilder.h"         // GpuSphere, GpuMaterial, GpuBvhNode
 
 #include <vulkan/vulkan.h>
 #include <glm/glm.hpp>
@@ -110,6 +111,37 @@ namespace Arche {
         };
 
         /**
+         * @brief Push constants for the path-trace compute dispatch (128 bytes).
+         */
+        struct PathTracePushConstants {
+            glm::vec3 cameraOrigin; float lensRadius;    // 16 B
+            glm::vec3 lowerLeft;    float _p0{0};        // 16 B
+            glm::vec3 horizontal;   float _p1{0};        // 16 B
+            glm::vec3 vertical;     float _p2{0};        // 16 B
+            glm::vec3 lensU;        float _p3{0};        // 16 B
+            glm::vec3 lensV;        float _p4{0};        // 16 B
+            uint32_t  frameIndex{0};
+            uint32_t  samplesPerFrame{1};
+            uint32_t  maxBounces{8};
+            uint32_t  sphereCount{0};
+            uint32_t  bvhNodeCount{0};
+            uint32_t  imageW{0};
+            uint32_t  imageH{0};
+            uint32_t  _pad{0};                           // total 128 B
+        };
+        static_assert(sizeof(PathTracePushConstants) == 128);
+
+        /**
+         * @brief Push constants for the accumulate / tone-map composite dispatch.
+         */
+        struct AccumulatePushConstants {
+            uint32_t totalSamples{1};
+            uint32_t imageW{0};
+            uint32_t imageH{0};
+            uint32_t _pad{0};
+        };
+
+        /**
          * @brief Vulkan rendering backend implementing IRenderBackend.
          *
          * Implements F-06 through F-13:
@@ -165,6 +197,9 @@ namespace Arche {
             bool     needsRenderTextureYFlip() const override { return false; }
             bool     supportsProceduralSky()   const override { return false; }
 
+            // --- Path trace mode ---
+            void setPathTraceMode(bool active) override { m_pathTraceMode = active; }
+
             // --- F-14: Scene geometry SSBOs ---
             void uploadSceneGeometry(const ResourceRegistry &registry) override;
             void updateInstanceBuffer(const RenderScene &scene) override;
@@ -179,6 +214,29 @@ namespace Arche {
             uint32_t getInstanceCount()         const { return m_instanceCount; }
             /** @brief Range table: mesh name → vertex/index offsets inside the flat SSBOs. */
             const std::unordered_map<std::string, MeshRange> &getMeshRanges() const { return m_meshRanges; }
+
+            // --- Path tracing ---
+
+            /**
+             * @brief Dispatch a path-trace frame and composite to the offscreen target.
+             *
+             * Builds (or reuses) GPU sphere/material/BVH buffers, dispatches the
+             * path-trace compute shader, then tone-maps the accumulation buffer into
+             * the offscreen colour image that ImGui samples.
+             *
+             * @param spheres    Scene sphere primitives
+             * @param materials  Per-sphere material data
+             * @param bvhNodes   Flat BVH array built by BvhBuilder
+             * @param pc         Camera + frame push-constant data
+             * @param totalSamples Accumulated sample count so far (for tone map)
+             * @param resetAccum   If true, zero the accumulation buffer first
+             */
+            void dispatchPathTrace(const std::vector<GpuSphere>    &spheres,
+                                   const std::vector<GpuMaterial>  &materials,
+                                   const std::vector<GpuBvhNode>   &bvhNodes,
+                                   const PathTracePushConstants     &pc,
+                                   uint32_t                          totalSamples,
+                                   bool                              resetAccum);
 
             // --- F-09: ImGui integration ---
 
@@ -300,6 +358,13 @@ namespace Arche {
             // --- F-14: Scene geometry helpers ---
             void destroySceneGeometryBuffers() noexcept;
 
+            // --- Path-tracing helpers ---
+            void createPathTracePipeline();
+            void destroyPathTracePipeline() noexcept;
+            void updatePtDescriptorSets();
+            void createPtAccumImage(uint32_t w, uint32_t h);
+            void destroyPtAccumImage() noexcept;
+
             // --- F-11: Compute pipeline ---
             void createComputePipeline();
             void createPhysicsDescriptorSetLayout();
@@ -381,7 +446,8 @@ namespace Arche {
             uint32_t m_currentFrame{0};
             uint32_t m_imageIndex{0};
             bool     m_framebufferResized{false};
-            bool     m_frameStarted{false}; ///< true between a successful beginFrame and endFrame
+            bool     m_frameStarted{false};    ///< true between a successful beginFrame and endFrame
+            bool     m_pathTraceMode{false};   ///< when true, skip offscreen raster pass in beginFrame/endFrame
 
             // --- F-08: Geometry pipeline ---
             VkDescriptorSetLayout m_descSetLayout{VK_NULL_HANDLE};
@@ -441,6 +507,37 @@ namespace Arche {
 
             static constexpr uint32_t k_maxInstances{4096};
             uint32_t m_instanceCount{0};
+
+            // --- Path-tracing pipeline ---
+            // Accumulation image (RGBA32F, storage — written each PT dispatch)
+            VkImage         m_ptAccumImage{VK_NULL_HANDLE};
+            VmaAllocation   m_ptAccumAlloc{VK_NULL_HANDLE};
+            VkImageView     m_ptAccumView{VK_NULL_HANDLE};
+
+            // Path-trace compute pipeline
+            VkDescriptorSetLayout m_ptDescSetLayout{VK_NULL_HANDLE};
+            VkDescriptorPool      m_ptDescPool{VK_NULL_HANDLE};
+            VkDescriptorSet       m_ptDescSet{VK_NULL_HANDLE};
+            VkPipelineLayout      m_ptPipelineLayout{VK_NULL_HANDLE};
+            VkPipeline            m_ptPipeline{VK_NULL_HANDLE};
+
+            // Accumulate / tone-map compute pipeline
+            VkDescriptorSetLayout m_accumDescSetLayout{VK_NULL_HANDLE};
+            VkDescriptorPool      m_accumDescPool{VK_NULL_HANDLE};
+            VkDescriptorSet       m_accumDescSet{VK_NULL_HANDLE};
+            VkPipelineLayout      m_accumPipelineLayout{VK_NULL_HANDLE};
+            VkPipeline            m_accumPipeline{VK_NULL_HANDLE};
+
+            // Scene SSBOs for path tracing (rebuilt on scene change)
+            GpuBuffer m_ptSphereBuffer;
+            GpuBuffer m_ptMaterialBuffer;
+            GpuBuffer m_ptBvhBuffer;
+            uint32_t  m_ptSphereCount{0};
+            uint32_t  m_ptBvhNodeCount{0};
+            bool      m_ptPipelineReady{false};
+
+            // Fixed offscreen colour format (R8G8B8A8_UNORM, supports STORAGE)
+            static constexpr VkFormat k_offscreenColorFormat{VK_FORMAT_R8G8B8A8_UNORM};
 
             // --- F-11: Compute pipeline ---
             std::unique_ptr<VulkanComputePipeline> m_computePipeline;

@@ -38,6 +38,11 @@
 #   include <VulkanBackend.h>
 #   include <RenderingSystem.h>
 #endif
+#include <RayTracingPanel.h>
+
+#ifdef ARCHE_BACKEND_VULKAN
+#   include <PathTracingPass.h>
+#endif
 
 int main() {
     try {
@@ -54,9 +59,28 @@ int main() {
         // Create and set the main camera
         auto mainCamera = std::make_shared<Arche::Render::Camera>();
         mainCamera->setPerspective(60.0, 1920.0 / 1080.0, 0.1, 1000.0);
-        mainCamera->SetPosition({0.0, 5.0, 20.0});
+        mainCamera->SetPosition({13, 2, 3});
+        mainCamera->setPitchYaw(-8.5, 192.9);
         engineCore->getRenderer()->setMainCamera(mainCamera);
 
+        auto ground = std::make_shared<Arche::Scene::SphereEntity>(1000.0f, glm::vec3(0, -1000, 0), false);
+        ground->setMaterialId("ground.mat");
+
+        auto centerSphere = std::make_shared<Arche::Scene::SphereEntity>(1.0f, glm::vec3(0, 1, 0), false);
+        centerSphere->setMaterialId("sphere_lambertian.mat");
+
+        auto leftSphere = std::make_shared<Arche::Scene::SphereEntity>(1.0f, glm::vec3(-4, 1, 0), false);
+        leftSphere->setMaterialId("sphere_glass.mat");
+
+        auto rightSphere = std::make_shared<Arche::Scene::SphereEntity>(1.0f, glm::vec3(4, 1, 0), false);
+        rightSphere->setMaterialId("sphere_metal.mat");
+
+        engineCore->getWorld()->addEntity(ground);
+        engineCore->getWorld()->addEntity(centerSphere);
+        engineCore->getWorld()->addEntity(leftSphere);
+        engineCore->getWorld()->addEntity(rightSphere);
+
+      
         // 4. Create the editor session wrapper around core engine services
         auto context = std::make_shared<Arche::GUI::EditorSession>(engineCore);
 
@@ -83,6 +107,20 @@ int main() {
                 engineCore->getRenderer()->getBackend());
 
         auto guiRunner = Arche::GUI::GUIRunner(window, vulkanBackend);
+
+        
+#ifdef ARCHE_BACKEND_VULKAN
+        auto *ptPass = new Arche::Render::PathTracingPass(vulkanBackend);
+        engineCore->getRenderer()->addRenderPass(std::shared_ptr<Arche::Render::IRenderPass>(ptPass));
+#endif
+
+        
+#ifdef ARCHE_BACKEND_VULKAN
+        panels.RegisterPanel(std::make_shared<Arche::GUI::RayTracingPanel>(context, ptPass));
+#else
+        panels.RegisterPanel(std::make_shared<Arche::GUI::RayTracingPanel>(context));
+#endif
+
 #else
         auto guiRunner = Arche::GUI::GUIRunner(window);
 #endif

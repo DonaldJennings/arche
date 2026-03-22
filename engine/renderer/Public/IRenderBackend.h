@@ -275,6 +275,16 @@ namespace Arche {
             virtual void uploadSceneGeometry(const ResourceRegistry &registry) {}
 
             /**
+             * @brief Notify the backend that path tracing is active this frame.
+             *
+             * When active, backends that implement path tracing (Vulkan) skip the
+             * rasterisation offscreen render pass in beginFrame()/endFrame() so
+             * the compute-written offscreen image is not overwritten.
+             * Default implementation is a no-op.
+             */
+            virtual void setPathTraceMode(bool /*active*/) {}
+
+            /**
              * @brief Write per-instance data into the host-visible instance SSBO.
              *
              * Maps transform, mesh index, and material ID for every RenderObject

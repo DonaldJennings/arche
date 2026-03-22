@@ -12,6 +12,17 @@ namespace Arche {
          * viewport colors, field of view, vsync, lighting properties, and
          * debug visualization options.
          */
+        /**
+         * @brief Path-tracing configuration (progressive GPU ray tracer).
+         */
+        struct PathTraceSettings {
+            bool  enabled{false};          ///< Toggle path tracing on/off
+            int   maxBounces{8};           ///< Maximum ray bounces per path
+            int   samplesPerFrame{1};      ///< New samples added each frame
+            float aperture{0.0f};          ///< Lens aperture (0 = pinhole)
+            float focusDistance{10.0f};    ///< Focus distance for DOF
+        };
+
         struct RenderSettings {
             glm::vec4 clearColor{0.1f, 0.12f, 0.15f, 1.0f}; ///< Background clear color (RGBA)
             float fieldOfView{60.0f};                        ///< Camera field of view in degrees
@@ -29,6 +40,8 @@ namespace Arche {
             bool wireframe{false};  ///< Enable wireframe rendering mode
             bool showGrid{true};    ///< Show grid in viewport
             bool showAxes{true};    ///< Show coordinate axes in viewport
+
+            PathTraceSettings pathTrace; ///< Path tracing settings
         };
 
         /**
