@@ -4,8 +4,6 @@
 #include "Camera.h"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_access.hpp>
-#include <cstdint>
-#include <cstring>
 
 #ifdef ARCHE_BACKEND_VULKAN
 #   include "VulkanBackend.h"
@@ -55,18 +53,6 @@ namespace Arche {
                 // ── Build sphere + material lists ─────────────────────────────
                 std::vector<GpuSphere>   spheres;
                 std::vector<GpuMaterial> materials;
-                std::size_t              sceneHash = 1469598103934665603ull; // FNV-1a seed
-
-                auto hashCombineU32 = [&](uint32_t v) {
-                    sceneHash ^= static_cast<std::size_t>(v);
-                    sceneHash *= 1099511628211ull;
-                };
-                auto hashCombineF32 = [&](float v) {
-                    static_assert(sizeof(float) == sizeof(uint32_t));
-                    uint32_t bits = 0;
-                    std::memcpy(&bits, &v, sizeof(bits));
-                    hashCombineU32(bits);
-                };
 
                 for (const auto &obj : view.opaqueObjects) {
                     if (obj.meshId != "uv_sphere.mesh") continue;
@@ -103,17 +89,6 @@ namespace Arche {
                     s.matIdx = static_cast<int>(materials.size());
                     spheres.push_back(s);
                     materials.push_back(mat);
-
-                    // Track scene content changes (transform/material edits, etc.)
-                    hashCombineF32(centre.x);
-                    hashCombineF32(centre.y);
-                    hashCombineF32(centre.z);
-                    hashCombineF32(radius);
-                    hashCombineF32(mat.albedo.x);
-                    hashCombineF32(mat.albedo.y);
-                    hashCombineF32(mat.albedo.z);
-                    hashCombineF32(mat.fuzzOrIOR);
-                    hashCombineU32(static_cast<uint32_t>(mat.type));
                 }
 
                 if (spheres.empty()) return;
@@ -128,7 +103,6 @@ namespace Arche {
                 if (m_prevSamplesPerFrame!= pts.samplesPerFrame)       reset = true;
                 if (m_prevAperture       != pts.aperture)              reset = true;
                 if (m_prevFocusDist      != pts.focusDistance)         reset = true;
-                if (m_prevSceneHash      != sceneHash)                 reset = true;
 
                 // Camera change detection
                 glm::mat4 vmat = view.viewMatrix;
@@ -142,7 +116,6 @@ namespace Arche {
                     m_prevSamplesPerFrame = pts.samplesPerFrame;
                     m_prevAperture        = pts.aperture;
                     m_prevFocusDist       = pts.focusDistance;
-                    m_prevSceneHash       = sceneHash;
                 }
 
                 // ── Build camera push constants ───────────────────────────────
@@ -219,7 +192,6 @@ namespace Arche {
             int       m_prevSamplesPerFrame{0};
             float     m_prevAperture{-1.0f};
             float     m_prevFocusDist{-1.0f};
-            std::size_t m_prevSceneHash{0};
         };
 
     } // namespace Render
