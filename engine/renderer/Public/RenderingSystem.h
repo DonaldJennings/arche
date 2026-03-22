@@ -10,6 +10,9 @@
 #include "RenderScene.h"
 #include "ResourceRegistry.h"
 #include "ShaderLoader.h"
+#ifdef ARCHE_BACKEND_VULKAN
+#include "PathTracingPass.h"
+#endif
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <memory>
@@ -99,13 +102,36 @@ namespace Arche {
                 viewData.cameraPosition   = m_mainCamera->GetPosition();
                 viewData.opaqueObjects    = scene.opaqueObjects;
 
+                const bool pathTraceRequested = settings.pathTrace.enabled;
+                bool       hasPathTracePass   = false;
+#ifdef ARCHE_BACKEND_VULKAN
+                for (const auto &pass : m_passes) {
+                    if (dynamic_cast<PathTracingPass *>(pass.get()) != nullptr) {
+                        hasPathTracePass = true;
+                        break;
+                    }
+                }
+#endif
+
+                const bool pathTraceActive = pathTraceRequested && hasPathTracePass;
+                if (pathTraceRequested && !hasPathTracePass) {
+                    ARCHE_LOG_WARN(m_logger, "Path tracing requested but no PathTracingPass is registered. Falling back to raster rendering.");
+                }
+
                 m_backend->setWireframe(settings.wireframe);
                 m_backend->updateInstanceBuffer(scene); // F-14: per-instance data before frame
-                m_backend->setPathTraceMode(settings.pathTrace.enabled); // PT mode: skip offscreen raster pass
+                m_backend->setPathTraceMode(pathTraceActive); // PT mode: skip offscreen raster pass
                 m_backend->beginFrame();
 
-                for (const std::shared_ptr<IRenderPass> &pass : m_passes)
+                for (const std::shared_ptr<IRenderPass> &pass : m_passes) {
+#ifdef ARCHE_BACKEND_VULKAN
+                    const bool isPathTracePass = dynamic_cast<PathTracingPass *>(pass.get()) != nullptr;
+                    if (pathTraceActive != isPathTracePass) {
+                        continue; // Run only PT pass in PT mode; skip PT pass in raster mode.
+                    }
+#endif
                     pass->render(viewData, *m_backend, *m_mainCamera, m_resources, renderingSettings);
+                }
             }
 
             /**
