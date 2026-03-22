@@ -87,7 +87,15 @@ namespace Arche {
             createLogicalDevice();
             createAllocator();           // F-10: VMA
             createCommandPool();
-            recreateSwapchain();         // F-07: swapchain + render passes + framebuffers
+            // F-07: swapchain + render passes + framebuffers
+            // Render passes are created once here (they only depend on swapchain format,
+            // which is stable across resizes) so ImGui's cached pipeline stays valid.
+            createSwapchain();
+            createSwapchainImageViews();
+            createGeometryRenderPass();
+            createImGuiRenderPass();
+            createDepthResources();
+            createFramebuffers();
             createSyncObjects();
             createCommandBuffers();
             createDescriptorPool();
@@ -161,6 +169,10 @@ namespace Arche {
                 m_descriptorPool = VK_NULL_HANDLE;
             }
             for (int i = 0; i < k_maxFramesInFlight; ++i) {
+                if (m_uboMapped[i] && m_allocator != VK_NULL_HANDLE) {
+                    vmaUnmapMemory(m_allocator, m_uboBuffers[i].allocation);
+                    m_uboMapped[i] = nullptr;
+                }
                 if (m_resourceManager) m_resourceManager->destroyBuffer(m_uboBuffers[i]);
             }
 
@@ -184,6 +196,16 @@ namespace Arche {
             }
 
             cleanupSwapchain();
+
+            // Render passes outlive the swapchain — destroy them explicitly here
+            if (m_imguiRenderPass != VK_NULL_HANDLE) {
+                vkDestroyRenderPass(m_device, m_imguiRenderPass, nullptr);
+                m_imguiRenderPass = VK_NULL_HANDLE;
+            }
+            if (m_geometryRenderPass != VK_NULL_HANDLE) {
+                vkDestroyRenderPass(m_device, m_geometryRenderPass, nullptr);
+                m_geometryRenderPass = VK_NULL_HANDLE;
+            }
 
             if (m_commandPool != VK_NULL_HANDLE) {
                 vkDestroyCommandPool(m_device, m_commandPool, nullptr);
@@ -224,24 +246,59 @@ namespace Arche {
         // ============================================================
 
         void VulkanBackend::beginFrame() {
+            // Guard against re-entrant calls (e.g. Viewport3D calls render() from
+            // inside the GUI frame, which would call beginFrame() a second time on
+            // the same frame slot and reuse an already-signalled semaphore).
+            if (m_frameStarted) return;
+
             // Wait for the in-flight fence of this frame slot
             vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame],
                             VK_TRUE, std::numeric_limits<uint64_t>::max());
 
-            // Acquire a swapchain image
-            VkResult result = vkAcquireNextImageKHR(
-                m_device, m_swapchain,
-                std::numeric_limits<uint64_t>::max(),
-                m_imageAvailableSemaphores[m_currentFrame],
-                VK_NULL_HANDLE,
-                &m_imageIndex);
+            // Detect resize by comparing the GLFW framebuffer size to the current
+            // swapchain extent every frame.  This avoids depending on a
+            // glfwSetFramebufferSizeCallback (which would conflict with ImGui's
+            // callback chain) and catches the cases where the driver returns
+            // VK_SUCCESS/VK_SUBOPTIMAL_KHR rather than VK_ERROR_OUT_OF_DATE_KHR.
+            {
+                int fbW = 0, fbH = 0;
+                glfwGetFramebufferSize(m_window, &fbW, &fbH);
+                if (fbW > 0 && fbH > 0 &&
+                    (static_cast<uint32_t>(fbW) != m_swapchainExtent.width ||
+                     static_cast<uint32_t>(fbH) != m_swapchainExtent.height))
+                {
+                    m_framebufferResized = true;
+                }
+            }
 
-            if (result == VK_ERROR_OUT_OF_DATE_KHR || m_framebufferResized) {
-                m_framebufferResized = false;
-                recreateSwapchain();
-                m_frameStarted = false;
-                return;
-            } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
+            // Acquire a swapchain image, recreating the swapchain when needed.
+            // The resize flag is checked BEFORE vkAcquireNextImageKHR so we never
+            // leave a signalled image-available semaphore unconsumed.
+            // After recreation we fall through and acquire immediately so the window
+            // stays live during continuous resize drags rather than skipping frames.
+            VkResult result;
+            for (;;) {
+                if (m_framebufferResized) {
+                    m_framebufferResized = false;
+                    recreateSwapchain();
+                }
+
+                result = vkAcquireNextImageKHR(
+                    m_device, m_swapchain,
+                    std::numeric_limits<uint64_t>::max(),
+                    m_imageAvailableSemaphores[m_currentFrame],
+                    VK_NULL_HANDLE,
+                    &m_imageIndex);
+
+                if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+                    // Swapchain is unusable — recreate and try again next iteration
+                    recreateSwapchain();
+                    continue;
+                }
+                break;
+            }
+
+            if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
                 throw std::runtime_error("VulkanBackend: failed to acquire swapchain image");
             }
 
@@ -292,11 +349,6 @@ namespace Arche {
                                         m_geometryPipelineLayout, 0, 1,
                                         &m_descriptorSets[m_currentFrame],
                                         0, nullptr);
-            }
-
-            // Update UBO with current view/proj
-            if (m_uboMapped[m_currentFrame]) {
-                std::memcpy(m_uboMapped[m_currentFrame], &m_viewProj, sizeof(ViewProjUBO));
             }
 
             m_frameStarted = true;
@@ -358,7 +410,9 @@ namespace Arche {
 
             VkResult result = vkQueuePresentKHR(m_presentQueue, &presentInfo);
             if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
-                recreateSwapchain();
+                // Defer recreation to the next beginFrame() so that fences and
+                // semaphores are in a clean state when recreateSwapchain() runs.
+                m_framebufferResized = true;
             } else if (result != VK_SUCCESS) {
                 throw std::runtime_error("VulkanBackend: failed to present swapchain image");
             }
@@ -375,7 +429,19 @@ namespace Arche {
 
         void VulkanBackend::setViewProjection(const glm::mat4 &view, const glm::mat4 &proj) {
             m_viewProj.view = view;
+            // GLM generates OpenGL-convention projection matrices (Y-up in NDC).
+            // Vulkan's NDC has Y pointing down, so every CCW triangle from GLM's
+            // perspective appears CW in Vulkan screen-space and gets back-face culled.
+            // Negating proj[1][1] flips the clip-space Y axis into Vulkan convention,
+            // preserving CCW winding and producing a correctly-oriented image.
             m_viewProj.proj = proj;
+            m_viewProj.proj[1][1] *= -1.0f;
+
+            // Upload immediately so draw commands recorded later in this same frame
+            // see the correct matrices when the command buffer executes on the GPU.
+            if (m_uboMapped[m_currentFrame]) {
+                std::memcpy(m_uboMapped[m_currentFrame], &m_viewProj, sizeof(ViewProjUBO));
+            }
         }
 
         void VulkanBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
@@ -621,14 +687,9 @@ namespace Arche {
                 vkDestroyImageView(m_device, iv, nullptr);
             m_swapchainImageViews.clear();
 
-            if (m_imguiRenderPass != VK_NULL_HANDLE) {
-                vkDestroyRenderPass(m_device, m_imguiRenderPass, nullptr);
-                m_imguiRenderPass = VK_NULL_HANDLE;
-            }
-            if (m_geometryRenderPass != VK_NULL_HANDLE) {
-                vkDestroyRenderPass(m_device, m_geometryRenderPass, nullptr);
-                m_geometryRenderPass = VK_NULL_HANDLE;
-            }
+            // Render passes are intentionally NOT destroyed here — they are stable across
+            // swapchain recreation (format doesn't change on resize) and ImGui's internal
+            // Vulkan pipeline keeps a reference to those handles.
 
             if (m_swapchain != VK_NULL_HANDLE) {
                 vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
@@ -637,19 +698,27 @@ namespace Arche {
         }
 
         void VulkanBackend::recreateSwapchain() {
+            // Block while the window is minimised (extent would be 0x0, which Vulkan rejects)
+            int w = 0, h = 0;
+            glfwGetFramebufferSize(m_window, &w, &h);
+            while (w == 0 || h == 0) {
+                glfwGetFramebufferSize(m_window, &w, &h);
+                glfwWaitEvents();
+            }
+
             vkDeviceWaitIdle(m_device);
+            // cleanupSwapchain destroys framebuffers, depth resources, image views and
+            // the swapchain itself — but NOT the render passes. Render passes are stable
+            // across resizes (they only depend on swapchain format, which doesn't change)
+            // and ImGui's cached Vulkan pipeline holds a reference to those handles.
             cleanupSwapchain();
 
             createSwapchain();
             createSwapchainImageViews();
-            createGeometryRenderPass();
-            createImGuiRenderPass();
             createDepthResources();
             createFramebuffers();
 
-            // Update ImGui context with new render pass
-            m_imguiContext.imguiRenderPass = m_imguiRenderPass;
-            m_imguiContext.imageCount      = m_swapchainImageCount;
+            m_imguiContext.imageCount = m_swapchainImageCount;
         }
 
         void VulkanBackend::createSwapchain() {
@@ -791,7 +860,10 @@ namespace Arche {
             dep.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             dep.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             dep.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            // READ_BIT is required for LOAD_OP_LOAD to see the geometry pass output;
+            // without it the load can observe undefined/stale data (visible as white overlay).
+            dep.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                              | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
             VkRenderPassCreateInfo rpCI{};
             rpCI.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1479,8 +1551,17 @@ namespace Arche {
         VkSurfaceFormatKHR VulkanBackend::chooseSwapSurfaceFormat(
             const std::vector<VkSurfaceFormatKHR> &formats) const
         {
+            // Prefer UNORM: shaders output sRGB-convention values directly (matching
+            // the OpenGL backend). Using an sRGB attachment format would cause the GPU
+            // to apply an additional linear→sRGB gamma conversion, doubling the encoding
+            // and washing out the image to near-white.
             for (const auto &f : formats)
-                if (f.format == VK_FORMAT_B8G8R8A8_SRGB &&
+                if (f.format == VK_FORMAT_B8G8R8A8_UNORM &&
+                    f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+                    return f;
+            // Fallback: try BGRA UNORM variant
+            for (const auto &f : formats)
+                if (f.format == VK_FORMAT_R8G8B8A8_UNORM &&
                     f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
                     return f;
             return formats[0];

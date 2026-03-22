@@ -112,6 +112,8 @@ int main() {
 #endif
         }
 
+        // GUI must be shut down before the Vulkan device is destroyed.
+        guiRunner.shutdown();
         engineCore->shutdown();
     } catch (const std::exception &ex) {
         std::cerr << "Exception: " << ex.what() << std::endl;

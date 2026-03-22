@@ -29,11 +29,7 @@ namespace Arche {
             (void)io;
             io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
             io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-#ifndef ARCHE_BACKEND_VULKAN
-            // ViewportsEnable requires per-platform-window swapchains under Vulkan
-            // which are not yet implemented. Disable to avoid rendering artefacts.
             io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
-#endif
 
             setDarkTheme(true, 1.0f);
 

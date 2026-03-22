@@ -39,6 +39,14 @@ public:
 
     void frame();
 
+    /**
+     * @brief Explicitly shut down the GUI system.
+     *
+     * Must be called before the Vulkan device is destroyed (i.e. before
+     * EngineCore::shutdown()).  The destructor calls this if not already done.
+     */
+    void shutdown();
+
 private:
     std::unique_ptr<IGUISystem> guiSystem;
 };

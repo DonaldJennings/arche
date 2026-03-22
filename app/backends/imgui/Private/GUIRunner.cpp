@@ -40,8 +40,13 @@ GUIRunner::GUIRunner(std::shared_ptr<GLFWWindowHandle> glfwWindow,
 #endif
 
 GUIRunner::~GUIRunner() {
+    shutdown();
+}
+
+void GUIRunner::shutdown() {
     if (guiSystem) {
         guiSystem->Shutdown();
+        guiSystem.reset();
     }
 }
 
