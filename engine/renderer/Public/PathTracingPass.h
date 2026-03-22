@@ -2,6 +2,7 @@
 #include "IRenderPass.h"
 #include "BvhBuilder.h"      // GpuSphere, GpuMaterial, GpuBvhNode, BvhBuilder
 #include "Camera.h"
+#include <algorithm>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_access.hpp>
 
@@ -55,11 +56,14 @@ namespace Arche {
                 std::vector<GpuMaterial> materials;
 
                 for (const auto &obj : view.opaqueObjects) {
-                    if (obj.meshId != "uv_sphere.mesh") continue;
-
-                    // Extract world centre and radius from the model matrix
+                    // Current path tracer primitive set is sphere-only.
+                    // Approximate every opaque object as a bounding sphere so
+                    // editor scenes remain visible in path-trace mode.
                     glm::vec3 centre = glm::vec3(obj.transform[3]);
-                    float     radius = glm::length(glm::vec3(obj.transform[0])); // scale X column
+                    float sx = glm::length(glm::vec3(obj.transform[0]));
+                    float sy = glm::length(glm::vec3(obj.transform[1]));
+                    float sz = glm::length(glm::vec3(obj.transform[2]));
+                    float radius = std::max(sx, std::max(sy, sz));
 
                     // Build GpuMaterial from the material resource
                     GpuMaterial mat{};
