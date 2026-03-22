@@ -1668,8 +1668,8 @@ namespace Arche {
             submitInfo.commandBufferCount = 1;
             submitInfo.pCommandBuffers    = &cmd;
 
-            vkQueueSubmit(m_computeQueue, 1, &submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(m_computeQueue);
+            vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
 
             vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
 
@@ -2421,13 +2421,13 @@ namespace Arche {
 
             m_ptSphereBuffer   = m_resourceManager->createDeviceBuffer(sphereBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                spheres.empty() ? nullptr : spheres.data(), m_commandPool, m_computeQueue);
+                spheres.empty() ? nullptr : spheres.data(), m_commandPool, m_graphicsQueue);
             m_ptMaterialBuffer = m_resourceManager->createDeviceBuffer(matBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                materials.empty() ? nullptr : materials.data(), m_commandPool, m_computeQueue);
+                materials.empty() ? nullptr : materials.data(), m_commandPool, m_graphicsQueue);
             m_ptBvhBuffer      = m_resourceManager->createDeviceBuffer(bvhBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                bvhNodes.empty() ? nullptr : bvhNodes.data(), m_commandPool, m_computeQueue);
+                bvhNodes.empty() ? nullptr : bvhNodes.data(), m_commandPool, m_graphicsQueue);
 
             m_ptSphereCount  = static_cast<uint32_t>(spheres.size());
             m_ptBvhNodeCount = static_cast<uint32_t>(bvhNodes.size());
@@ -2549,8 +2549,8 @@ namespace Arche {
             si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             si.commandBufferCount = 1;
             si.pCommandBuffers    = &cmd;
-            vkQueueSubmit(m_computeQueue, 1, &si, VK_NULL_HANDLE);
-            vkQueueWaitIdle(m_computeQueue);
+            vkQueueSubmit(m_graphicsQueue, 1, &si, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
             vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
         }
 
