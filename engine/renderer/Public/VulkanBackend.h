@@ -321,7 +321,8 @@ namespace Arche {
             void createImage(uint32_t w, uint32_t h, VkFormat fmt,
                              VkImageTiling tiling, VkImageUsageFlags usage,
                              VmaMemoryUsage memUsage,
-                             VkImage &image, VmaAllocation &alloc);
+                             VkImage &image, VmaAllocation &alloc,
+                             VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
             VkImageView createImageView(VkImage image, VkFormat format,
                                         VkImageAspectFlags aspect) const;
             VkShaderModule createShaderModule(const uint32_t *spv, size_t wordCount) const;
@@ -406,17 +407,26 @@ namespace Arche {
             ImGuiRemoveTextureFn           m_imguiRemoveTexture;
 
             // --- Offscreen render target (scene rendered here; displayed in ImGui viewport) ---
+            // Resolve target (single-sample, SAMPLED — what ImGui displays)
             VkImage         m_offscreenColorImage{VK_NULL_HANDLE};
             VmaAllocation   m_offscreenColorAlloc{VK_NULL_HANDLE};
             VkImageView     m_offscreenColorView{VK_NULL_HANDLE};
+            // MSAA color attachment (transient, not sampled)
+            VkImage         m_msaaColorImage{VK_NULL_HANDLE};
+            VmaAllocation   m_msaaColorAlloc{VK_NULL_HANDLE};
+            VkImageView     m_msaaColorView{VK_NULL_HANDLE};
+            // Depth (multisampled, matches m_msaaSamples)
             VkImage         m_offscreenDepthImage{VK_NULL_HANDLE};
             VmaAllocation   m_offscreenDepthAlloc{VK_NULL_HANDLE};
             VkImageView     m_offscreenDepthView{VK_NULL_HANDLE};
+
             VkSampler       m_offscreenSampler{VK_NULL_HANDLE};
             VkRenderPass    m_offscreenRenderPass{VK_NULL_HANDLE};
             VkFramebuffer   m_offscreenFramebuffer{VK_NULL_HANDLE};
             VkDescriptorSet m_offscreenDescSet{VK_NULL_HANDLE};  ///< ImGui texture handle
             VkExtent2D      m_offscreenExtent{};
+
+            VkSampleCountFlagBits m_msaaSamples{VK_SAMPLE_COUNT_4_BIT}; ///< MSAA sample count
 
             // --- F-14: Flat scene geometry SSBOs ---
             GpuBuffer m_sceneVertexBuffer;                              ///< Device-local: all SceneVertex data

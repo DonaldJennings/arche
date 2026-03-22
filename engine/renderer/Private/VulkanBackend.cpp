@@ -84,6 +84,24 @@ namespace Arche {
             if (k_enableValidation) setupDebugMessenger();
             createSurface();
             pickPhysicalDevice();
+
+            // Determine highest sample count the device supports for color + depth.
+            // Clamp the requested 4x to whatever the hardware can deliver.
+            {
+                VkPhysicalDeviceProperties props;
+                vkGetPhysicalDeviceProperties(m_physicalDevice, &props);
+                VkSampleCountFlags counts =
+                    props.limits.framebufferColorSampleCounts &
+                    props.limits.framebufferDepthSampleCounts;
+
+                // Pick the highest count ≤ VK_SAMPLE_COUNT_4_BIT that the device supports.
+                for (VkSampleCountFlagBits c : {VK_SAMPLE_COUNT_4_BIT,
+                                                VK_SAMPLE_COUNT_2_BIT,
+                                                VK_SAMPLE_COUNT_1_BIT}) {
+                    if (counts & c) { m_msaaSamples = c; break; }
+                }
+            }
+
             createLogicalDevice();
             createAllocator();           // F-10: VMA
             createCommandPool();
@@ -331,10 +349,14 @@ namespace Arche {
             rpInfo.renderArea.offset = {0, 0};
             rpInfo.renderArea.extent = m_offscreenExtent;
 
-            std::array<VkClearValue, 2> clearValues{};
+            // MSAA: 3 attachments (msaa color, depth, resolve); non-MSAA: 2.
+            // Resolve att uses DONT_CARE load but the array must cover all indices.
+            std::array<VkClearValue, 3> clearValues{};
             clearValues[0].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // sky blue
             clearValues[1].depthStencil = {1.0f, 0};
-            rpInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
+            clearValues[2].color        = {{0.35f, 0.55f, 0.80f, 1.0f}}; // resolve (unused)
+            const bool msaaActive = (m_msaaSamples != VK_SAMPLE_COUNT_1_BIT);
+            rpInfo.clearValueCount = msaaActive ? 3u : 2u;
             rpInfo.pClearValues    = clearValues.data();
 
             vkCmdBeginRenderPass(cmd, &rpInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -794,7 +816,9 @@ namespace Arche {
             uint32_t h = static_cast<uint32_t>(std::max(1, m_backBufferSize.y));
             m_offscreenExtent = {w, h};
 
-            // --- Color image (sampled by ImGui) ---
+            const bool msaa = (m_msaaSamples != VK_SAMPLE_COUNT_1_BIT);
+
+            // --- Resolve/single-sample color image (sampled by ImGui) ---
             createImage(w, h, m_swapchainFormat, VK_IMAGE_TILING_OPTIMAL,
                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                         VMA_MEMORY_USAGE_GPU_ONLY,
@@ -803,15 +827,28 @@ namespace Arche {
                                                     m_swapchainFormat,
                                                     VK_IMAGE_ASPECT_COLOR_BIT);
 
-            // --- Depth image ---
+            // --- Depth image (multisampled when MSAA is active) ---
             VkFormat depthFmt = findDepthFormat();
             createImage(w, h, depthFmt, VK_IMAGE_TILING_OPTIMAL,
                         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                         VMA_MEMORY_USAGE_GPU_ONLY,
-                        m_offscreenDepthImage, m_offscreenDepthAlloc);
+                        m_offscreenDepthImage, m_offscreenDepthAlloc,
+                        m_msaaSamples);
             m_offscreenDepthView = createImageView(m_offscreenDepthImage,
                                                     depthFmt,
                                                     VK_IMAGE_ASPECT_DEPTH_BIT);
+
+            // --- MSAA color image (transient, only when MSAA > 1x) ---
+            if (msaa) {
+                createImage(w, h, m_swapchainFormat, VK_IMAGE_TILING_OPTIMAL,
+                            VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+                            VMA_MEMORY_USAGE_GPU_ONLY,
+                            m_msaaColorImage, m_msaaColorAlloc,
+                            m_msaaSamples);
+                m_msaaColorView = createImageView(m_msaaColorImage,
+                                                   m_swapchainFormat,
+                                                   VK_IMAGE_ASPECT_COLOR_BIT);
+            }
 
             // --- Sampler ---
             VkSamplerCreateInfo samplerCI{};
@@ -826,57 +863,80 @@ namespace Arche {
                 throw std::runtime_error("Vulkan: failed to create offscreen sampler");
 
             // --- Render pass ---
+            // Att 0: color (MSAA transient when msaa=true, else single-sample)
             VkAttachmentDescription colorAtt{};
             colorAtt.format         = m_swapchainFormat;
-            colorAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
+            colorAtt.samples        = msaa ? m_msaaSamples : VK_SAMPLE_COUNT_1_BIT;
             colorAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
-            colorAtt.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+            colorAtt.storeOp        = msaa ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE;
             colorAtt.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             colorAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            colorAtt.initialLayout  = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            colorAtt.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            colorAtt.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+            colorAtt.finalLayout    = msaa ? VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+                                           : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
+            // Att 1: depth
             VkAttachmentDescription depthAtt{};
             depthAtt.format         = depthFmt;
-            depthAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
+            depthAtt.samples        = m_msaaSamples;
             depthAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
             depthAtt.storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
             depthAtt.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
             depthAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-            depthAtt.initialLayout  = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+            depthAtt.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
             depthAtt.finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
             VkAttachmentReference colorRef{0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
             VkAttachmentReference depthRef{1, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+            // Att 2 (MSAA only): resolve target (single-sample, sampled by ImGui)
+            VkAttachmentDescription resolveAtt{};
+            VkAttachmentReference   resolveRef{};
+            if (msaa) {
+                resolveAtt.format         = m_swapchainFormat;
+                resolveAtt.samples        = VK_SAMPLE_COUNT_1_BIT;
+                resolveAtt.loadOp         = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                resolveAtt.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
+                resolveAtt.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+                resolveAtt.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+                resolveAtt.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+                resolveAtt.finalLayout    = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                resolveRef.attachment     = 2;
+                resolveRef.layout         = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+            }
 
             VkSubpassDescription subpass{};
             subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
             subpass.colorAttachmentCount    = 1;
             subpass.pColorAttachments       = &colorRef;
             subpass.pDepthStencilAttachment = &depthRef;
+            if (msaa) subpass.pResolveAttachments = &resolveRef;
 
             // External → subpass 0: shader read → color attachment write
             VkSubpassDependency dep0{};
-            dep0.srcSubpass    = VK_SUBPASS_EXTERNAL;
-            dep0.dstSubpass    = 0;
-            dep0.srcStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-            dep0.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
-            dep0.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            dep0.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dep0.srcSubpass      = VK_SUBPASS_EXTERNAL;
+            dep0.dstSubpass      = 0;
+            dep0.srcStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dep0.srcAccessMask   = VK_ACCESS_SHADER_READ_BIT;
+            dep0.dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                                   VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+            dep0.dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                                   VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
             dep0.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
             // Subpass 0 → external: color attachment write → shader read
             VkSubpassDependency dep1{};
-            dep1.srcSubpass    = 0;
-            dep1.dstSubpass    = VK_SUBPASS_EXTERNAL;
-            dep1.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            dep1.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            dep1.dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-            dep1.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            dep1.srcSubpass      = 0;
+            dep1.dstSubpass      = VK_SUBPASS_EXTERNAL;
+            dep1.srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            dep1.srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            dep1.dstStageMask    = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            dep1.dstAccessMask   = VK_ACCESS_SHADER_READ_BIT;
             dep1.dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
-            std::array<VkAttachmentDescription, 2> atts = {colorAtt, depthAtt};
-            std::array<VkSubpassDependency, 2>      deps = {dep0, dep1};
+            std::vector<VkAttachmentDescription> atts = {colorAtt, depthAtt};
+            if (msaa) atts.push_back(resolveAtt);
+            std::array<VkSubpassDependency, 2> deps = {dep0, dep1};
 
             VkRenderPassCreateInfo rpCI{};
             rpCI.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -891,7 +951,13 @@ namespace Arche {
                 throw std::runtime_error("Vulkan: failed to create offscreen render pass");
 
             // --- Framebuffer ---
-            std::array<VkImageView, 2> fbAttachments = {m_offscreenColorView, m_offscreenDepthView};
+            // MSAA: {msaaColor, depth, resolveColor}  |  non-MSAA: {color, depth}
+            std::vector<VkImageView> fbAttachments;
+            if (msaa)
+                fbAttachments = {m_msaaColorView, m_offscreenDepthView, m_offscreenColorView};
+            else
+                fbAttachments = {m_offscreenColorView, m_offscreenDepthView};
+
             VkFramebufferCreateInfo fbCI{};
             fbCI.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             fbCI.renderPass      = m_offscreenRenderPass;
@@ -903,7 +969,10 @@ namespace Arche {
             if (vkCreateFramebuffer(m_device, &fbCI, nullptr, &m_offscreenFramebuffer) != VK_SUCCESS)
                 throw std::runtime_error("Vulkan: failed to create offscreen framebuffer");
 
-            // --- Transition images to expected initial layouts ---
+            // --- Transition resolve/single-sample color image to SHADER_READ_ONLY ---
+            // (MSAA transient image starts in UNDEFINED which the render pass handles;
+            //  the resolve target and non-MSAA color image both need SHADER_READ_ONLY
+            //  so ImGui can sample them immediately on the first frame.)
             VkCommandBufferAllocateInfo allocAI{};
             allocAI.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
             allocAI.commandPool        = m_commandPool;
@@ -918,7 +987,7 @@ namespace Arche {
             beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
             vkBeginCommandBuffer(cmd, &beginInfo);
 
-            // Color: UNDEFINED → SHADER_READ_ONLY_OPTIMAL
+            // Resolve/color: UNDEFINED → SHADER_READ_ONLY_OPTIMAL
             {
                 VkImageMemoryBarrier barrier{};
                 barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -933,24 +1002,6 @@ namespace Arche {
                 vkCmdPipelineBarrier(cmd,
                     VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                     VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                    0, 0, nullptr, 0, nullptr, 1, &barrier);
-            }
-
-            // Depth: UNDEFINED → DEPTH_STENCIL_ATTACHMENT_OPTIMAL
-            {
-                VkImageMemoryBarrier barrier{};
-                barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-                barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
-                barrier.newLayout           = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-                barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-                barrier.image               = m_offscreenDepthImage;
-                barrier.subresourceRange    = {VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1};
-                barrier.srcAccessMask       = 0;
-                barrier.dstAccessMask       = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-                vkCmdPipelineBarrier(cmd,
-                    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
                     0, 0, nullptr, 0, nullptr, 1, &barrier);
             }
 
@@ -999,6 +1050,15 @@ namespace Arche {
                 vmaDestroyImage(m_allocator, m_offscreenColorImage, m_offscreenColorAlloc);
                 m_offscreenColorImage = VK_NULL_HANDLE;
                 m_offscreenColorAlloc = VK_NULL_HANDLE;
+            }
+            if (m_msaaColorView != VK_NULL_HANDLE) {
+                vkDestroyImageView(m_device, m_msaaColorView, nullptr);
+                m_msaaColorView = VK_NULL_HANDLE;
+            }
+            if (m_msaaColorImage != VK_NULL_HANDLE) {
+                vmaDestroyImage(m_allocator, m_msaaColorImage, m_msaaColorAlloc);
+                m_msaaColorImage = VK_NULL_HANDLE;
+                m_msaaColorAlloc = VK_NULL_HANDLE;
             }
         }
 
@@ -1267,7 +1327,7 @@ namespace Arche {
 
             VkPipelineMultisampleStateCreateInfo ms{};
             ms.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-            ms.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+            ms.rasterizationSamples = m_msaaSamples;
 
             VkPipelineDepthStencilStateCreateInfo ds{};
             ds.sType            = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
@@ -1922,7 +1982,8 @@ namespace Arche {
                                         VkFormat fmt, VkImageTiling tiling,
                                         VkImageUsageFlags usage,
                                         VmaMemoryUsage memUsage,
-                                        VkImage &image, VmaAllocation &alloc)
+                                        VkImage &image, VmaAllocation &alloc,
+                                        VkSampleCountFlagBits samples)
         {
             VkImageCreateInfo ci{};
             ci.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1934,7 +1995,7 @@ namespace Arche {
             ci.tiling        = tiling;
             ci.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
             ci.usage         = usage;
-            ci.samples       = VK_SAMPLE_COUNT_1_BIT;
+            ci.samples       = samples;
             ci.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
 
             VmaAllocationCreateInfo allocCI{};
