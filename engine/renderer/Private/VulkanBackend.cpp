@@ -2431,6 +2431,10 @@ namespace Arche {
 
             updatePtDescriptorSets();
 
+            PathTracePushConstants pc = pcData;
+            pc.imageW = m_offscreenExtent.width;
+            pc.imageH = m_offscreenExtent.height;
+
             // ── Record a one-shot compute command buffer ──────────────────────
             VkCommandBufferAllocateInfo cai{};
             cai.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -2473,7 +2477,7 @@ namespace Arche {
                                     m_ptPipelineLayout, 0, 1, &m_ptDescSet, 0, nullptr);
             vkCmdPushConstants(cmd, m_ptPipelineLayout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                               sizeof(PathTracePushConstants), &pcData);
+                               sizeof(PathTracePushConstants), &pc);
 
             uint32_t gx = (m_offscreenExtent.width  + 15) / 16;
             uint32_t gy = (m_offscreenExtent.height + 15) / 16;
