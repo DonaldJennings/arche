@@ -488,7 +488,10 @@ namespace Arche {
         }
 
         void VulkanBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
-            if (!m_geometryPipelineReady || !m_frameStarted) return;
+            // In path-trace mode beginFrame() intentionally skips opening the
+            // raster offscreen render pass. Any graphics draw command recorded in
+            // that mode is invalid and can crash in vendor drivers.
+            if (m_pathTraceMode || !m_geometryPipelineReady || !m_frameStarted) return;
 
             // Lazy upload
             if (m_gpuMeshes.find(mesh.getName()) == m_gpuMeshes.end()) {
