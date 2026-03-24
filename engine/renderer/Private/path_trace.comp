@@ -252,7 +252,7 @@ vec3 trace(vec3 ro, vec3 rd, inout uint rng) {
             vec3 atten, scattered;
             if (scatter(rd, h, atten, scattered, rng)) {
                 throughput *= atten;
-                ro = h.p;
+                ro = h.p + h.n * 0.001; // offset ray origin to prevent self-intersection
                 rd = scattered;
             } else {
                 return vec3(0.0);
@@ -288,6 +288,14 @@ void main() {
                 - pc.cameraOrigin - offset;
 
         sum += trace(ro, rd, rng);
+        vec3 sample = trace(ro, rd, rng);
+        float lum = dot(sample, vec3(0.2126, 0.7152, 0.0722));
+        if (lum > 10.0) {
+            // Firefly suppression: clamp very bright samples to avoid
+            // overwhelming the temporal average and causing splotches.
+            sample *= 10.0 / lum;
+        }
+        sum += sample;
     }
 
     // Accumulate (R/G/B = sum; A = sample count)
