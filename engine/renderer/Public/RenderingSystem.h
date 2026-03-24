@@ -115,7 +115,7 @@ namespace Arche {
 
                 const bool pathTraceActive = pathTraceRequested && hasPathTracePass;
                 if (pathTraceRequested && !hasPathTracePass) {
-                    ARCHE_LOG_WARN(m_logger, "Path tracing requested but no PathTracingPass is registered. Falling back to raster rendering.");
+                    ARCHE_LOG_WARNING(m_logger, "Path tracing requested but no PathTracingPass is registered. Falling back to raster rendering.");
                 }
 
                 m_backend->setWireframe(settings.wireframe);
