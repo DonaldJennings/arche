@@ -63,9 +63,6 @@ int main() {
         mainCamera->setPitchYaw(-8.5, 192.9);
         engineCore->getRenderer()->setMainCamera(mainCamera);
 
-        auto ground = std::make_shared<Arche::Scene::SphereEntity>(1000.0f, glm::vec3(0, -1000, 0), false);
-        ground->setMaterialId("ground.mat");
-
         auto centerSphere = std::make_shared<Arche::Scene::SphereEntity>(1.0f, glm::vec3(0, 1, 0), false);
         centerSphere->setMaterialId("sphere_lambertian.mat");
 
@@ -75,7 +72,6 @@ int main() {
         auto rightSphere = std::make_shared<Arche::Scene::SphereEntity>(1.0f, glm::vec3(4, 1, 0), false);
         rightSphere->setMaterialId("sphere_metal.mat");
 
-        engineCore->getWorld()->addEntity(ground);
         engineCore->getWorld()->addEntity(centerSphere);
         engineCore->getWorld()->addEntity(leftSphere);
         engineCore->getWorld()->addEntity(rightSphere);
