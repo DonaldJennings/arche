@@ -2060,6 +2060,7 @@ namespace Arche {
 
         void VulkanBackend::createPtAccumImage(uint32_t w, uint32_t h) {
             destroyPtAccumImage();
+            m_ptAccumExtent = {w, h};
             createImage(w, h, VK_FORMAT_R32G32B32A32_SFLOAT,
                         VK_IMAGE_TILING_OPTIMAL,
                         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -2108,6 +2109,7 @@ namespace Arche {
         }
 
         void VulkanBackend::destroyPtAccumImage() noexcept {
+            m_ptAccumExtent = {0, 0};
             if (m_ptAccumView != VK_NULL_HANDLE) {
                 vkDestroyImageView(m_device, m_ptAccumView, nullptr);
                 m_ptAccumView = VK_NULL_HANDLE;
@@ -2400,10 +2402,13 @@ namespace Arche {
                 createPtAccumImage(m_offscreenExtent.width, m_offscreenExtent.height);
             }
 
-            // Recreate accum image if offscreen size changed
+            // Recreate accum image if it doesn't match the current offscreen extent.
+            // m_ptAccumExtent tracks the dimensions the image was created with;
+            // comparing against m_offscreenExtent (not m_backBufferSize) is correct
+            // because recreateSwapchain() keeps both in sync after a resize.
             if (m_ptAccumImage == VK_NULL_HANDLE ||
-                m_offscreenExtent.width  != static_cast<uint32_t>(m_backBufferSize.x) ||
-                m_offscreenExtent.height != static_cast<uint32_t>(m_backBufferSize.y))
+                m_ptAccumExtent.width  != m_offscreenExtent.width ||
+                m_ptAccumExtent.height != m_offscreenExtent.height)
             {
                 createPtAccumImage(m_offscreenExtent.width, m_offscreenExtent.height);
                 resetAccum = true;
@@ -2474,9 +2479,15 @@ namespace Arche {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ptPipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     m_ptPipelineLayout, 0, 1, &m_ptDescSet, 0, nullptr);
+            // Fill in the image dimensions that the shader uses for bounds-checking
+            // and UV generation. These are not known at PathTracingPass build time,
+            // so they are injected here from the current offscreen extent.
+            PathTracePushConstants pc = pcData;
+            pc.imageW = m_offscreenExtent.width;
+            pc.imageH = m_offscreenExtent.height;
             vkCmdPushConstants(cmd, m_ptPipelineLayout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                               sizeof(PathTracePushConstants), &pcData);
+                               sizeof(PathTracePushConstants), &pc);
 
             uint32_t gx = (m_offscreenExtent.width  + 15) / 16;
             uint32_t gy = (m_offscreenExtent.height + 15) / 16;

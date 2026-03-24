@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstdint>
 #include "Camera.h"
 #include "IRenderBackend.h"
 #include "IRenderPass.h"
@@ -10,6 +9,7 @@
 #include "RenderScene.h"
 #include "ResourceRegistry.h"
 #include "ShaderLoader.h"
+#include <cstdint>
 #ifdef ARCHE_BACKEND_VULKAN
 #include "PathTracingPass.h"
 #endif
@@ -24,12 +24,9 @@ namespace Arche {
 
         class RenderingSystem {
           public:
-            RenderingSystem(std::shared_ptr<Core::LoggingService> logger,
-                            std::unique_ptr<IRenderBackend> backend,
-                            glm::ivec2 backBufferSize = {800, 600},
-                            bool vsync = true)
-                : m_logger(logger), m_backend(std::move(backend)),
-                  m_backBufferSize(backBufferSize), m_vsync(vsync) {}
+            RenderingSystem(std::shared_ptr<Core::LoggingService> logger, std::unique_ptr<IRenderBackend> backend,
+                            glm::ivec2 backBufferSize = {800, 600}, bool vsync = true)
+                : m_logger(logger), m_backend(std::move(backend)), m_backBufferSize(backBufferSize), m_vsync(vsync) {}
 
             void initialise(std::shared_ptr<ShaderLoader> shaderLoader,
                             std::shared_ptr<MaterialLoader> materialLoader) {
@@ -49,22 +46,21 @@ namespace Arche {
             }
 
             void shutdown() noexcept {
-                if (m_backend) m_backend->shutdown();
+                if (m_backend)
+                    m_backend->shutdown();
             }
 
             void onResize(glm::ivec2 newSize) {
                 m_backBufferSize = newSize;
-                if (m_backend) m_backend->resize(newSize);
+                if (m_backend)
+                    m_backend->resize(newSize);
                 if (m_mainCamera) {
-                    double aspectRatio = static_cast<double>(newSize.x) /
-                                        static_cast<double>(newSize.y);
+                    double aspectRatio = static_cast<double>(newSize.x) / static_cast<double>(newSize.y);
                     m_mainCamera->setPerspective(60.0, aspectRatio, 0.1, 1000.0);
                 }
             }
 
-            void setMainCamera(std::shared_ptr<Arche::Render::Camera> camera) {
-                m_mainCamera = std::move(camera);
-            }
+            void setMainCamera(std::shared_ptr<Arche::Render::Camera> camera) { m_mainCamera = std::move(camera); }
             std::shared_ptr<Arche::Render::Camera> getMainCamera() const { return m_mainCamera; }
 
             void addRenderPass(std::shared_ptr<IRenderPass> pass) {
@@ -74,7 +70,7 @@ namespace Arche {
                 }
             }
 
-            ResourceRegistry       &resources()       { return m_resources; }
+            ResourceRegistry &resources() { return m_resources; }
             const ResourceRegistry &resources() const { return m_resources; }
 
             /**
@@ -97,13 +93,13 @@ namespace Arche {
                 renderingSettings.globalSettings = settings;
 
                 RenderView viewData;
-                viewData.viewMatrix       = glm::mat4(m_mainCamera->GetViewMatrix());
+                viewData.viewMatrix = glm::mat4(m_mainCamera->GetViewMatrix());
                 viewData.projectionMatrix = glm::mat4(m_mainCamera->GetProjectionMatrix());
-                viewData.cameraPosition   = m_mainCamera->GetPosition();
-                viewData.opaqueObjects    = scene.opaqueObjects;
+                viewData.cameraPosition = m_mainCamera->GetPosition();
+                viewData.opaqueObjects = scene.opaqueObjects;
 
                 const bool pathTraceRequested = settings.pathTrace.enabled;
-                bool       hasPathTracePass   = false;
+                bool hasPathTracePass = false;
 #ifdef ARCHE_BACKEND_VULKAN
                 for (const auto &pass : m_passes) {
                     if (dynamic_cast<PathTracingPass *>(pass.get()) != nullptr) {
@@ -115,11 +111,12 @@ namespace Arche {
 
                 const bool pathTraceActive = pathTraceRequested && hasPathTracePass;
                 if (pathTraceRequested && !hasPathTracePass) {
-                    ARCHE_LOG_WARNING(m_logger, "Path tracing requested but no PathTracingPass is registered. Falling back to raster rendering.");
+                    ARCHE_LOG_WARNING(m_logger, "Path tracing requested but no PathTracingPass is registered. Falling "
+                                                "back to raster rendering.");
                 }
 
                 m_backend->setWireframe(settings.wireframe);
-                m_backend->updateInstanceBuffer(scene); // F-14: per-instance data before frame
+                m_backend->updateInstanceBuffer(scene);       // F-14: per-instance data before frame
                 m_backend->setPathTraceMode(pathTraceActive); // PT mode: skip offscreen raster pass
                 m_backend->beginFrame();
 
@@ -142,16 +139,13 @@ namespace Arche {
              * For OpenGL this is a no-op (swap buffers is handled externally).
              */
             void present() {
-                if (m_backend) m_backend->endFrame();
+                if (m_backend)
+                    m_backend->endFrame();
             }
 
-            glm::ivec2   getBackBufferSize()      const { return m_backBufferSize; }
-            uint64_t     getRenderTextureID()     const {
-                return m_backend ? m_backend->getRenderTextureID() : 0u;
-            }
-            bool         needsRenderTextureYFlip() const {
-                return m_backend ? m_backend->needsRenderTextureYFlip() : true;
-            }
+            glm::ivec2 getBackBufferSize() const { return m_backBufferSize; }
+            uint64_t getRenderTextureID() const { return m_backend ? m_backend->getRenderTextureID() : 0u; }
+            bool needsRenderTextureYFlip() const { return m_backend ? m_backend->needsRenderTextureYFlip() : true; }
 
             /**
              * @brief Return a raw (non-owning) pointer to the underlying render backend.
@@ -163,14 +157,14 @@ namespace Arche {
 
           private:
             std::vector<std::shared_ptr<Render::IRenderPass>> m_passes;
-            std::unique_ptr<IRenderBackend>                    m_backend;
-            std::shared_ptr<Core::LoggingService>              m_logger;
-            std::shared_ptr<Arche::Render::Camera>             m_mainCamera;
-            Arche::Render::RenderPassSettings                  m_renderPassSettings;
-            ResourceRegistry                                   m_resources;
+            std::unique_ptr<IRenderBackend> m_backend;
+            std::shared_ptr<Core::LoggingService> m_logger;
+            std::shared_ptr<Arche::Render::Camera> m_mainCamera;
+            Arche::Render::RenderPassSettings m_renderPassSettings;
+            ResourceRegistry m_resources;
 
             glm::ivec2 m_backBufferSize;
-            bool       m_vsync;
+            bool m_vsync;
         };
 
     } // namespace Render
