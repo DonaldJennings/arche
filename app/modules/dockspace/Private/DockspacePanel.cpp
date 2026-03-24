@@ -44,6 +44,32 @@ namespace Arche {
         DockspacePanel::DockspacePanel(std::shared_ptr<EditorSession> contextIn)
             : name{"Dockspace"}, context(std::move(contextIn)) {}
 
+        void DockspacePanel::ApplyDefaultLayout(ImGuiID dockspace_id, const ImGuiViewport* viewport) {
+            ImGui::DockBuilderRemoveNode(dockspace_id);
+            ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
+
+            ImGuiID dock_upper, dock_bottom;
+            ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.25f, &dock_bottom, &dock_upper);
+
+            ImGuiID dock_left, dock_center_right;
+            ImGui::DockBuilderSplitNode(dock_upper, ImGuiDir_Left, 0.20f, &dock_left, &dock_center_right);
+
+            ImGuiID dock_center, dock_right;
+            ImGui::DockBuilderSplitNode(dock_center_right, ImGuiDir_Right, 0.25f, &dock_right, &dock_center);
+
+            ImGui::DockBuilderDockWindow("World Properties", dock_left);
+            ImGui::DockBuilderDockWindow("3DViewport",       dock_center);
+            ImGui::DockBuilderDockWindow("Entity Inspector", dock_right);
+            ImGui::DockBuilderDockWindow("Log",              dock_bottom);
+            ImGui::DockBuilderDockWindow("Metrics",          dock_bottom);
+            ImGui::DockBuilderDockWindow("Material Browser", dock_bottom);
+            ImGui::DockBuilderDockWindow("Shader Browser",   dock_bottom);
+            ImGui::DockBuilderDockWindow("Ray Tracing",      dock_bottom);
+
+            ImGui::DockBuilderFinish(dockspace_id);
+        }
+
         void DockspacePanel::Draw() {
             ImGuiIO &io = ImGui::GetIO();
 
@@ -134,6 +160,14 @@ namespace Arche {
 
                     ImGui::EndMenu();
                 }
+
+                if (ImGui::BeginMenu("Layout")) {
+                    if (ImGui::MenuItem("Reset to Default")) {
+                        m_resetLayout = true;
+                    }
+                    ImGui::EndMenu();
+                }
+
                 ImGui::EndMenuBar();
             }
 
@@ -150,35 +184,10 @@ namespace Arche {
             ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
             ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
 
-            // Build the default layout once — only when no dockspace node exists yet
-            if (!ImGui::DockBuilderGetNode(dockspace_id)) {
-                ImGui::DockBuilderRemoveNode(dockspace_id);
-                ImGui::DockBuilderAddNode(dockspace_id, ImGuiDockNodeFlags_DockSpace);
-                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->WorkSize);
-
-                // Split off the bottom strip for output panels
-                ImGuiID dock_upper, dock_bottom;
-                ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.25f, &dock_bottom, &dock_upper);
-
-                // Split the upper area into left sidebar, center viewport, right sidebar
-                ImGuiID dock_left, dock_center_right;
-                ImGui::DockBuilderSplitNode(dock_upper, ImGuiDir_Left, 0.20f, &dock_left, &dock_center_right);
-
-                ImGuiID dock_center, dock_right;
-                ImGui::DockBuilderSplitNode(dock_center_right, ImGuiDir_Right, 0.25f, &dock_right, &dock_center);
-
-                // Assign panels to regions
-                ImGui::DockBuilderDockWindow("World Properties",  dock_left);
-                ImGui::DockBuilderDockWindow("3DViewport",        dock_center);
-                ImGui::DockBuilderDockWindow("Entity Inspector",  dock_right);
-
-                // Stack all output panels as tabs in the bottom strip
-                ImGui::DockBuilderDockWindow("Log",               dock_bottom);
-                ImGui::DockBuilderDockWindow("Metrics",           dock_bottom);
-                ImGui::DockBuilderDockWindow("Material Browser",  dock_bottom);
-                ImGui::DockBuilderDockWindow("Shader Browser",    dock_bottom);
-
-                ImGui::DockBuilderFinish(dockspace_id);
+            // Build the default layout on first launch or when a reset is requested
+            if (!ImGui::DockBuilderGetNode(dockspace_id) || m_resetLayout) {
+                m_resetLayout = false;
+                ApplyDefaultLayout(dockspace_id, viewport);
             }
 
             ImGui::End();

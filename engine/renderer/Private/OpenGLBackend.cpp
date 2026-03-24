@@ -137,6 +137,9 @@ void OpenGLBackend::initialise() {
     // We assume an OpenGL context is already current (created by the app / ImGui layer)
     // Global state enabling
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+    glFrontFace(GL_CCW);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

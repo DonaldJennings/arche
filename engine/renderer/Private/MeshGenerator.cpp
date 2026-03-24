@@ -89,34 +89,51 @@ namespace Arche::Render {
 
         float h = size * 0.5f;
 
-        // 8 vertices
-        glm::vec3 positions[] = {
-            {-h, -h, -h}, {h, -h, -h}, {h, h, -h}, {-h, h, -h}, // back
-            {-h, -h, h},  {h, -h, h},  {h, h, h},  {-h, h, h}   // front
-        };
-
-        uint32_t idx[] = {
-            0, 1, 2, 0, 2, 3, // back
-            4, 6, 5, 4, 7, 6, // front
-            4, 5, 1, 4, 1, 0, // bottom
-            3, 2, 6, 3, 6, 7, // top
-            1, 5, 6, 1, 6, 2, // right
-            4, 0, 3, 4, 3, 7  // left
-        };
-
         auto &verts = mesh->vertices();
-        auto &inds = mesh->indices();
+        auto &inds  = mesh->indices();
 
-        for (const auto &pos : positions) {
-            Mesh::Vertex v{};
-            v.position = pos;
-            // simple normal = position normalized (placeholder)
-            v.normal = glm::normalize(pos);
-            verts.push_back(v);
+        // 6 faces, 4 vertices each, 2 triangles each — 24 vertices total with flat normals.
+        // Winding is CCW when viewed from outside (front face).
+        struct FaceDesc {
+            glm::vec3 normal;
+            glm::vec3 p[4]; // CCW from outside
+        };
+
+        FaceDesc faces[] = {
+            // +Z front
+            { {0,0,1}, { {-h,-h,h},{h,-h,h},{h,h,h},{-h,h,h} } },
+            // -Z back
+            { {0,0,-1}, { {h,-h,-h},{-h,-h,-h},{-h,h,-h},{h,h,-h} } },
+            // +X right
+            { {1,0,0}, { {h,-h,h},{h,-h,-h},{h,h,-h},{h,h,h} } },
+            // -X left
+            { {-1,0,0}, { {-h,-h,-h},{-h,-h,h},{-h,h,h},{-h,h,-h} } },
+            // +Y top
+            { {0,1,0}, { {-h,h,h},{h,h,h},{h,h,-h},{-h,h,-h} } },
+            // -Y bottom
+            { {0,-1,0}, { {-h,-h,-h},{h,-h,-h},{h,-h,h},{-h,-h,h} } },
+        };
+
+        for (const auto &face : faces) {
+            uint32_t base = static_cast<uint32_t>(verts.size());
+
+            glm::vec2 uvs[4] = { {0,0},{1,0},{1,1},{0,1} };
+            for (int i = 0; i < 4; ++i) {
+                Mesh::Vertex v{};
+                v.position = face.p[i];
+                v.normal   = face.normal;
+                v.uv       = uvs[i];
+                verts.push_back(v);
+            }
+
+            // Two CCW triangles: 0,1,2 and 0,2,3
+            inds.push_back(base + 0);
+            inds.push_back(base + 1);
+            inds.push_back(base + 2);
+            inds.push_back(base + 0);
+            inds.push_back(base + 2);
+            inds.push_back(base + 3);
         }
-
-        for (uint32_t i : idx)
-            inds.push_back(i);
 
         return mesh;
     }

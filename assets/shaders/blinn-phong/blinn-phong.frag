@@ -8,7 +8,7 @@ out vec4 fragColor;
 uniform vec4 uBaseColor;   // diffuse color
 uniform float uShininess;  // specular shininess exponent
 
-uniform vec3 uLightPos;    // world-space light
+uniform vec3 uLightDir;    // world-space directional light direction (normalized)
 uniform vec3 uLightColor;  // RGB intensity
 
 uniform vec3 uCameraPos;   // view position
@@ -16,7 +16,7 @@ uniform vec3 uCameraPos;   // view position
 void main()
 {
     vec3 N = normalize(vNormal);
-    vec3 L = normalize(uLightPos - vWorldPos);
+    vec3 L = normalize(uLightDir);
     vec3 V = normalize(uCameraPos - vWorldPos);
 
     // Blinn–Phong half vector
@@ -28,12 +28,12 @@ void main()
 
     // Specular (Blinn–Phong)
     float spec = pow(max(dot(N, H), 0.0), uShininess);
-    vec3 specular = spec * uLightColor;
+    vec3 specular = vec3(spec);
 
     // Ambient term
     vec3 ambient = 0.05 * uBaseColor.rgb;
 
-    vec3 finalColor = (ambient + diffuse + specular) * uLightColor;
+    vec3 finalColor = ambient + (diffuse + specular) * uLightColor;
 
     fragColor = vec4(finalColor, uBaseColor.a);
 }

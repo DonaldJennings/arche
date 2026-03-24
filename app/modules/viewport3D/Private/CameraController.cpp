@@ -58,7 +58,7 @@ namespace Arche {
             const double yawR = glm::radians(static_cast<double>(yaw)); // convert to radians
             glm::dvec3 t{ target.x, target.y, target.z };
 
-            const glm::dvec3 right{ std::cos(yawR), 0.0, std::sin(yawR) };
+            const glm::dvec3 right{ std::cos(yawR), 0.0, -std::sin(yawR) };
             const glm::dvec3 up{ 0.0, 1.0, 0.0 };
 
             const double scale = static_cast<double>(panSpeed * distance);

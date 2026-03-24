@@ -62,7 +62,7 @@ namespace Arche::Render {
 
     void SkyPass::uploaderUniformProperties(IRenderBackend &backend, glm::mat4 inverseViewProjection) {
         backend.setUniformMat4("uInvViewProj", inverseViewProjection);
-        backend.setUniformVec3("uSunDirection", m_sunDirection);
+        backend.setUniformVec3("uSunDir", m_sunDirection);
         backend.setUniformVec3("uSunColor", m_sunColor);
     };
 

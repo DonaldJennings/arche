@@ -19,6 +19,8 @@ namespace Arche {
           private:
             std::string name;
             std::shared_ptr<EditorSession> context;
+            bool m_resetLayout = false;
+            void ApplyDefaultLayout(ImGuiID dockspace_id, const ImGuiViewport* viewport);
         };
     } // namespace GUI
 } // namespace Arche

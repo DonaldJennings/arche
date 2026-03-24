@@ -112,9 +112,13 @@ namespace Arche {
                     Render::RenderObject obj;
                     obj.meshId     = std::string(entity->getMeshId());
                     obj.materialId = std::string(entity->getMaterialId());
-                    obj.transform  = glm::scale(
-                        glm::translate(glm::mat4(1.0f), entity->getPosition()),
-                        entity->getScale());
+                    glm::vec3 rot = entity->getRotation();
+                    glm::mat4 T = glm::translate(glm::mat4(1.0f), entity->getPosition());
+                    glm::mat4 R = glm::rotate(glm::mat4(1.0f), glm::radians(rot.y), glm::vec3(0,1,0))
+                                * glm::rotate(glm::mat4(1.0f), glm::radians(rot.x), glm::vec3(1,0,0))
+                                * glm::rotate(glm::mat4(1.0f), glm::radians(rot.z), glm::vec3(0,0,1));
+                    glm::mat4 S = glm::scale(glm::mat4(1.0f), entity->getScale());
+                    obj.transform  = T * R * S;
                     scene.opaqueObjects.push_back(std::move(obj));
                 }
                 return scene;

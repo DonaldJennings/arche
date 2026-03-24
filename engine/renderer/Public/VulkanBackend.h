@@ -176,13 +176,18 @@ namespace Arche {
 
             // --- Stubs (not required for Vulkan MVP) ---
             void     setShader(std::shared_ptr<Shader>) override {}
-            void     setMaterial(const Material &) override {}
+            void     setMaterial(const Material &mat) override { m_cachedAlbedo = mat.getBaseColor(); }
             void     bindTexture(const std::string &, unsigned int, int) override {}
             void     setUniformMat4(const std::string &, const glm::mat4 &) override {}
             void     setUniformVec4(const std::string &, const glm::vec4 &) override {}
             void     setUniform1f(const std::string &, float) override {}
             void     setUniform1i(const std::string &, int) override {}
-            void     setUniformVec3(const std::string &, const glm::vec3 &) override {}
+            void     setUniformVec3(const std::string &name, const glm::vec3 &v) override {
+                if (name == "uAlbedo")     m_cachedAlbedo    = glm::vec4(v, m_cachedAlbedo.a);
+                if (name == "uLightDir")   m_cachedLightDir  = v;
+                if (name == "uLightColor") m_cachedLightColor = v;
+                if (name == "uCameraPos")  m_cachedCameraPos  = v;
+            }
             void     setDepthMask(bool) override {}
             void     setWireframe(bool) override {}
             void     initialiseShadowResources(int) override {}
@@ -480,6 +485,12 @@ namespace Arche {
             std::array<void *,          k_maxFramesInFlight> m_uboMapped{};
 
             bool m_geometryPipelineReady{false};
+
+            // Cached per-draw material / lighting state (flushed as push constants in drawMesh)
+            glm::vec4 m_cachedAlbedo{0.8f, 0.8f, 0.8f, 1.0f};
+            glm::vec3 m_cachedLightDir{0.4f, 1.0f, 0.6f};
+            glm::vec3 m_cachedLightColor{1.0f, 1.0f, 1.0f};
+            glm::vec3 m_cachedCameraPos{0.0f, 0.0f, 0.0f};
 
             // Mesh cache: meshName → GpuMesh
             std::unordered_map<std::string, GpuMesh> m_gpuMeshes;

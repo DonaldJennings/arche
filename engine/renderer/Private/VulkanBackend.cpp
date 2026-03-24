@@ -504,10 +504,28 @@ namespace Arche {
             const GpuMesh &gm  = it->second;
             VkCommandBuffer cmd = m_commandBuffers[m_currentFrame];
 
-            // Push model matrix
+            // Push model matrix (vertex stage, offset 0, 64 B)
             vkCmdPushConstants(cmd, m_geometryPipelineLayout,
                                VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4),
                                glm::value_ptr(model));
+
+            // Push material + lighting (fragment stage, offset 64, 64 B)
+            // Layout must match geometry.frag push_constant block:
+            //   vec4 albedo, vec4 lightDir, vec4 lightColor, vec4 cameraPos
+            struct FragPC {
+                glm::vec4 albedo;
+                glm::vec4 lightDir;    // w unused
+                glm::vec4 lightColor;  // w unused
+                glm::vec4 cameraPos;   // w unused
+            };
+            FragPC fpc{};
+            fpc.albedo     = m_cachedAlbedo;
+            fpc.lightDir   = glm::vec4(m_cachedLightDir,   0.0f);
+            fpc.lightColor = glm::vec4(m_cachedLightColor, 0.0f);
+            fpc.cameraPos  = glm::vec4(m_cachedCameraPos,  0.0f);
+            vkCmdPushConstants(cmd, m_geometryPipelineLayout,
+                               VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(glm::mat4), sizeof(FragPC),
+                               &fpc);
 
             VkDeviceSize offset = 0;
             vkCmdBindVertexBuffers(cmd, 0, 1, &gm.vertexBuffer.buffer, &offset);
@@ -1337,7 +1355,9 @@ namespace Arche {
             rast.sType       = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
             rast.polygonMode = VK_POLYGON_MODE_FILL;
             rast.cullMode    = VK_CULL_MODE_BACK_BIT;
-            rast.frontFace   = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            // GLM's proj[1][1] *= -1 Y-flip reverses winding order in clip space,
+            // so CW here corresponds to CCW in world space (the correct front face).
+            rast.frontFace   = VK_FRONT_FACE_CLOCKWISE;
             rast.lineWidth   = 1.0f;
 
             VkPipelineMultisampleStateCreateInfo ms{};
@@ -1368,18 +1388,22 @@ namespace Arche {
             dynState.dynamicStateCount = static_cast<uint32_t>(dynStates.size());
             dynState.pDynamicStates    = dynStates.data();
 
-            // Push constant: model matrix (mat4 = 64 bytes)
-            VkPushConstantRange pcRange{};
-            pcRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-            pcRange.offset     = 0;
-            pcRange.size       = sizeof(glm::mat4);
+            // Push constants: model (VS, 64 B) + albedo/lightDir/lightColor/cameraPos (FS, 64 B).
+            // Total 128 bytes — the guaranteed minimum in the Vulkan spec.
+            VkPushConstantRange pcRanges[2]{};
+            pcRanges[0].stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+            pcRanges[0].offset     = 0;
+            pcRanges[0].size       = sizeof(glm::mat4);                      // 64 B
+            pcRanges[1].stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+            pcRanges[1].offset     = sizeof(glm::mat4);                      // 64 B
+            pcRanges[1].size       = 4 * sizeof(glm::vec4);                  // 64 B
 
             VkPipelineLayoutCreateInfo layoutCI{};
             layoutCI.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
             layoutCI.setLayoutCount         = 1;
             layoutCI.pSetLayouts            = &m_descSetLayout;
-            layoutCI.pushConstantRangeCount = 1;
-            layoutCI.pPushConstantRanges    = &pcRange;
+            layoutCI.pushConstantRangeCount = 2;
+            layoutCI.pPushConstantRanges    = pcRanges;
 
             if (vkCreatePipelineLayout(m_device, &layoutCI, nullptr,
                                        &m_geometryPipelineLayout) != VK_SUCCESS)

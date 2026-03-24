@@ -113,6 +113,8 @@ namespace Arche {
 
                 backend.setShader(resources.getShader(material->getShaderName()));
 
+                backend.setMaterial(*material);
+
                 backend.setUniformVec3("uCameraPos", cameraPos);
                 backend.setUniformVec3("uLightDir", -settings.globalSettings.directionalLightDirection);
                 backend.setUniformVec3("uLightColor", settings.globalSettings.directionalLightColor);
