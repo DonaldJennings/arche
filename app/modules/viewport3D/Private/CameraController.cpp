@@ -80,7 +80,7 @@ namespace Arche {
             const double cp = std::cos(pitchR), sp = std::sin(pitchR);
 
             // -Z forward convention (OpenGL-style)
-            glm::dvec3 f = glm::normalize(glm::dvec3(sy * cp, -sp, -cy * cp));
+            glm::dvec3 f = glm::normalize(glm::dvec3(-sy * cp, sp, -cy * cp));
             glm::dvec3 r = glm::normalize(glm::cross(f, glm::dvec3(0.0, 1.0, 0.0)));
             glm::dvec3 u = glm::normalize(glm::cross(r, f));
 

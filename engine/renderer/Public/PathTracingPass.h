@@ -158,11 +158,27 @@ namespace Arche {
 
                 // ── Detect scene or settings change → reset accumulation ──────
                 bool reset = false;
-                if (m_prevSphereCount    != spheres.size())            reset = true;
+                if (m_prevSphereCount != spheres.size())
+                {
+                    reset = true;
+                }
+                else
+                {
+                    // Check for changes in individual spheres (position, radius, material)
+                    for (size_t i = 0; i < spheres.size(); ++i) {
+                        if (spheres[i].center != m_prevSpheres[i].center || spheres[i].radius != m_prevSpheres[i].radius)
+                        {
+                            reset = true;
+                            break;
+                        }
+                    }
+                }
                 if (m_prevMaxBounces     != pts.maxBounces)            reset = true;
                 if (m_prevSamplesPerFrame!= pts.samplesPerFrame)       reset = true;
                 if (m_prevAperture       != pts.aperture)              reset = true;
                 if (m_prevFocusDist      != pts.focusDistance)         reset = true;
+
+                m_prevSpheres = spheres; // store current sphere state for next frame's change detection
 
                 // Camera change detection
                 glm::mat4 vmat = view.viewMatrix;
@@ -272,6 +288,8 @@ namespace Arche {
             int       m_prevSamplesPerFrame{0};///< Samples-per-frame count from the previous frame.
             float     m_prevAperture{-1.0f};   ///< Aperture value from the previous frame.
             float     m_prevFocusDist{-1.0f};  ///< Focus distance from the previous frame.
+
+            std::vector<GpuSphere> m_prevSpheres; ///< Previous frame's sphere list for change detection.
         };
 
     } // namespace Render
