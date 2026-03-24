@@ -488,7 +488,10 @@ namespace Arche {
         }
 
         void VulkanBackend::drawMesh(const Mesh &mesh, const glm::mat4 &model) {
-            if (!m_geometryPipelineReady || !m_frameStarted) return;
+            // In path-trace mode beginFrame() intentionally skips opening the
+            // raster offscreen render pass. Any graphics draw command recorded in
+            // that mode is invalid and can crash in vendor drivers.
+            if (m_pathTraceMode || !m_geometryPipelineReady || !m_frameStarted) return;
 
             // Lazy upload
             if (m_gpuMeshes.find(mesh.getName()) == m_gpuMeshes.end()) {
@@ -1665,8 +1668,8 @@ namespace Arche {
             submitInfo.commandBufferCount = 1;
             submitInfo.pCommandBuffers    = &cmd;
 
-            vkQueueSubmit(m_computeQueue, 1, &submitInfo, VK_NULL_HANDLE);
-            vkQueueWaitIdle(m_computeQueue);
+            vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
 
             vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
 
@@ -2057,6 +2060,7 @@ namespace Arche {
 
         void VulkanBackend::createPtAccumImage(uint32_t w, uint32_t h) {
             destroyPtAccumImage();
+            m_ptAccumExtent = {w, h};
             createImage(w, h, VK_FORMAT_R32G32B32A32_SFLOAT,
                         VK_IMAGE_TILING_OPTIMAL,
                         VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -2105,6 +2109,7 @@ namespace Arche {
         }
 
         void VulkanBackend::destroyPtAccumImage() noexcept {
+            m_ptAccumExtent = {0, 0};
             if (m_ptAccumView != VK_NULL_HANDLE) {
                 vkDestroyImageView(m_device, m_ptAccumView, nullptr);
                 m_ptAccumView = VK_NULL_HANDLE;
@@ -2397,10 +2402,13 @@ namespace Arche {
                 createPtAccumImage(m_offscreenExtent.width, m_offscreenExtent.height);
             }
 
-            // Recreate accum image if offscreen size changed
+            // Recreate accum image if it doesn't match the current offscreen extent.
+            // m_ptAccumExtent tracks the dimensions the image was created with;
+            // comparing against m_offscreenExtent (not m_backBufferSize) is correct
+            // because recreateSwapchain() keeps both in sync after a resize.
             if (m_ptAccumImage == VK_NULL_HANDLE ||
-                m_offscreenExtent.width  != static_cast<uint32_t>(m_backBufferSize.x) ||
-                m_offscreenExtent.height != static_cast<uint32_t>(m_backBufferSize.y))
+                m_ptAccumExtent.width  != m_offscreenExtent.width ||
+                m_ptAccumExtent.height != m_offscreenExtent.height)
             {
                 createPtAccumImage(m_offscreenExtent.width, m_offscreenExtent.height);
                 resetAccum = true;
@@ -2418,13 +2426,13 @@ namespace Arche {
 
             m_ptSphereBuffer   = m_resourceManager->createDeviceBuffer(sphereBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                spheres.empty() ? nullptr : spheres.data(), m_commandPool, m_computeQueue);
+                spheres.empty() ? nullptr : spheres.data(), m_commandPool, m_graphicsQueue);
             m_ptMaterialBuffer = m_resourceManager->createDeviceBuffer(matBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                materials.empty() ? nullptr : materials.data(), m_commandPool, m_computeQueue);
+                materials.empty() ? nullptr : materials.data(), m_commandPool, m_graphicsQueue);
             m_ptBvhBuffer      = m_resourceManager->createDeviceBuffer(bvhBytes,
                 VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                bvhNodes.empty() ? nullptr : bvhNodes.data(), m_commandPool, m_computeQueue);
+                bvhNodes.empty() ? nullptr : bvhNodes.data(), m_commandPool, m_graphicsQueue);
 
             m_ptSphereCount  = static_cast<uint32_t>(spheres.size());
             m_ptBvhNodeCount = static_cast<uint32_t>(bvhNodes.size());
@@ -2471,9 +2479,15 @@ namespace Arche {
             vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, m_ptPipeline);
             vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                                     m_ptPipelineLayout, 0, 1, &m_ptDescSet, 0, nullptr);
+            // Fill in the image dimensions that the shader uses for bounds-checking
+            // and UV generation. These are not known at PathTracingPass build time,
+            // so they are injected here from the current offscreen extent.
+            PathTracePushConstants pc = pcData;
+            pc.imageW = m_offscreenExtent.width;
+            pc.imageH = m_offscreenExtent.height;
             vkCmdPushConstants(cmd, m_ptPipelineLayout,
                                VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                               sizeof(PathTracePushConstants), &pcData);
+                               sizeof(PathTracePushConstants), &pc);
 
             uint32_t gx = (m_offscreenExtent.width  + 15) / 16;
             uint32_t gy = (m_offscreenExtent.height + 15) / 16;
@@ -2546,8 +2560,8 @@ namespace Arche {
             si.sType              = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             si.commandBufferCount = 1;
             si.pCommandBuffers    = &cmd;
-            vkQueueSubmit(m_computeQueue, 1, &si, VK_NULL_HANDLE);
-            vkQueueWaitIdle(m_computeQueue);
+            vkQueueSubmit(m_graphicsQueue, 1, &si, VK_NULL_HANDLE);
+            vkQueueWaitIdle(m_graphicsQueue);
             vkFreeCommandBuffers(m_device, m_commandPool, 1, &cmd);
         }
 

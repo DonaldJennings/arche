@@ -220,16 +220,37 @@ namespace Arche {
             /**
              * @brief Dispatch a path-trace frame and composite to the offscreen target.
              *
-             * Builds (or reuses) GPU sphere/material/BVH buffers, dispatches the
-             * path-trace compute shader, then tone-maps the accumulation buffer into
-             * the offscreen colour image that ImGui samples.
+             * Performs the following work each call:
+             *  1. Lazily creates the path-trace + accumulate compute pipelines and the
+             *     RGBA32F accumulation image on the first invocation.
+             *  2. Recreates the accumulation image if its dimensions no longer match
+             *     @c m_offscreenExtent (i.e. after a viewport resize).
+             *  3. Uploads @p spheres, @p materials, and @p bvhNodes to device-local
+             *     SSBOs, rebuilding them every call.
+             *  4. Updates all descriptor-set bindings (accum image, scene SSBOs,
+             *     offscreen image) via @c updatePtDescriptorSets().
+             *  5. Records a one-shot command buffer:
+             *     - Optionally clears the accumulation image when @p resetAccum is true.
+             *     - Dispatches @c path_trace.comp (16×16 workgroups).
+             *     - Pipeline barrier: compute write → compute read on accum image.
+             *     - Transitions offscreen image SHADER_READ_ONLY → GENERAL.
+             *     - Dispatches @c accumulate.comp (tone-maps accum → offscreen).
+             *     - Transitions offscreen image GENERAL → SHADER_READ_ONLY.
+             *  6. Submits the command buffer to @c m_graphicsQueue and waits for idle.
              *
-             * @param spheres    Scene sphere primitives
-             * @param materials  Per-sphere material data
-             * @param bvhNodes   Flat BVH array built by BvhBuilder
-             * @param pc         Camera + frame push-constant data
-             * @param totalSamples Accumulated sample count so far (for tone map)
-             * @param resetAccum   If true, zero the accumulation buffer first
+             * @note @p pc.imageW and @p pc.imageH are intentionally left at zero by
+             *       PathTracingPass::render() and are injected here from
+             *       @c m_offscreenExtent before the push-constant upload.  Both
+             *       shaders use these values in a bounds-check guard; if either is
+             *       zero every invocation returns immediately and nothing is written.
+             *
+             * @param spheres      Scene sphere primitives.
+             * @param materials    Per-sphere material data.
+             * @param bvhNodes     Flat BVH array produced by BvhBuilder::build().
+             * @param pc           Camera + frame push-constant data.  @c imageW and
+             *                     @c imageH are overwritten with @c m_offscreenExtent.
+             * @param totalSamples Total accumulated sample count (for tone-map divide).
+             * @param resetAccum   If true, clear the accumulation buffer before dispatch.
              */
             void dispatchPathTrace(const std::vector<GpuSphere>    &spheres,
                                    const std::vector<GpuMaterial>  &materials,
@@ -535,6 +556,15 @@ namespace Arche {
             uint32_t  m_ptSphereCount{0};
             uint32_t  m_ptBvhNodeCount{0};
             bool      m_ptPipelineReady{false};
+
+            /** @brief Dimensions the accumulation image was created at.
+             *
+             *  Compared against @c m_offscreenExtent each dispatch to detect when
+             *  the viewport has been resized and the accum image must be reallocated.
+             *  Reset to {0,0} by destroyPtAccumImage() so the next dispatch always
+             *  allocates a fresh image.
+             */
+            VkExtent2D m_ptAccumExtent{0, 0};
 
             // Fixed offscreen colour format (R8G8B8A8_UNORM, supports STORAGE)
             static constexpr VkFormat k_offscreenColorFormat{VK_FORMAT_R8G8B8A8_UNORM};

@@ -1,9 +1,27 @@
 #version 450
 // ─────────────────────────────────────────────────────────────────────────────
-// Arche Engine — accumulate.comp
-// Reads the RGBA32F accumulation buffer, divides by sample count, applies
-// sqrt-gamma correction, and writes the result to the 8-bit output image
-// (the offscreen colour target that ImGui samples).
+/// @file accumulate.comp
+/// @brief Tone-map / accumulate compute shader.
+///
+/// Reads the RGBA32F accumulation buffer written by @c path_trace.comp,
+/// divides the accumulated radiance by @c totalSamples, applies gamma-2
+/// correction (sqrt), clamps to [0, 1], and writes the result to the 8-bit
+/// offscreen colour image (@c uOutputImage) that is sampled by ImGui.
+///
+/// **Bindings**
+///   - binding 0 (@c uAccumImage)  : RGBA32F storage image, read-only.
+///                                   Filled by @c path_trace.comp.
+///   - binding 1 (@c uOutputImage) : RGBA8 storage image, write-only.
+///                                   Displayed by ImGui via @c m_offscreenDescSet.
+///
+/// **Push constants** (16 bytes, see @c AccumulatePushConstants in VulkanBackend.h):
+///   - @c totalSamples : accumulated sample count (set by VulkanBackend::dispatchPathTrace).
+///   - @c imageW / @c imageH : offscreen image dimensions in pixels.
+///
+/// Early-out: any invocation whose pixel coordinate exceeds @c imageW or
+/// @c imageH returns without writing.  If either dimension is zero every
+/// invocation returns immediately and the output image is never written —
+/// @c VulkanBackend::dispatchPathTrace() must inject valid non-zero values.
 // ─────────────────────────────────────────────────────────────────────────────
 layout(local_size_x = 16, local_size_y = 16) in;
 

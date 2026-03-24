@@ -1,8 +1,39 @@
 #version 450
 // ─────────────────────────────────────────────────────────────────────────────
-// Arche Engine — path_trace.comp
-// Progressive path-tracer: one dispatch adds samplesPerFrame new samples to the
-// RGBA32F accumulation image.  R/G/B = sum of radiance; A = sample count.
+/// @file path_trace.comp
+/// @brief Progressive GPU path-tracing compute shader.
+///
+/// Each dispatch adds @c samplesPerFrame new Monte-Carlo path samples to the
+/// RGBA32F accumulation image (@c uAccumImage).  Channel layout:
+///   - RGB = accumulated sum of radiance (NOT divided by sample count yet)
+///   - A   = unused (zero-filled)
+///
+/// The companion shader @c accumulate.comp divides by @c totalSamples and
+/// tone-maps the result into the 8-bit output image that ImGui displays.
+///
+/// **Geometry** — spheres only, described by @c SphereBuffer (std430) and
+/// accelerated by a flat BVH stored in @c BvhBuffer (std430).
+///
+/// **Materials** (per sphere, via @c MaterialBuffer):
+///   - type 0 : Lambertian (diffuse)
+///   - type 1 : Metal      (@c fuzzOrIOR = roughness, 0 = perfect mirror)
+///   - type 2 : Dielectric (@c fuzzOrIOR = index of refraction, e.g. 1.5)
+///
+/// **Camera** — thin-lens model driven by push constants:
+///   @c lowerLeft, @c horizontal, @c vertical define the virtual film plane;
+///   @c lensU / @c lensV and @c lensRadius model depth-of-field.
+///
+/// **RNG** — per-pixel PCG seeded from pixel coordinates and @c frameIndex to
+/// produce decorrelated noise each frame for temporal accumulation.
+///
+/// **Push constants** (128 bytes, see @c PathTracePushConstants in VulkanBackend.h):
+///   - Camera parameters (96 bytes)
+///   - @c frameIndex, @c samplesPerFrame, @c maxBounces, @c sphereCount
+///   - @c bvhNodeCount, @c imageW, @c imageH, padding
+///
+/// @c imageW and @c imageH are injected by VulkanBackend::dispatchPathTrace()
+/// from @c m_offscreenExtent; they must never be zero or all invocations will
+/// return immediately at the bounds-check on line 239.
 // ─────────────────────────────────────────────────────────────────────────────
 layout(local_size_x = 16, local_size_y = 16) in;
 
